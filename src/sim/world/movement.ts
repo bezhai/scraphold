@@ -9,26 +9,36 @@
 import type { Game } from '../game';
 import { tileAtPoint, tileCenter } from '../map/grid';
 import { assaultFlow, ensureNav, type NavGrid } from '../nav/navGrid';
-import { findPath, smoothPath } from '../nav/pathfind';
-import type { Motion, Soldier, Unit } from '../state';
+import { findPath, lineClear, smoothPath } from '../nav/pathfind';
+import type { Motion, Point, Soldier, Unit } from '../state';
 import { TICKS_PER_SECOND } from '../time';
 import { forEachInRadius, isOnMap } from './spatial';
 
 /** A unit stops when this close to its final goal (tiles). */
 export const ARRIVE_DISTANCE = 0.08;
+/**
+ * A waypoint is passed within WAYPOINT_REACHED (Manhattan) once the unit's body has a clear line
+ * from where it stands to the point after it; until then it walks on into the corner (passed at
+ * WAYPOINT_EXACT), so it does not cut the corner and snag on the building beside it.
+ */
 const WAYPOINT_REACHED = 0.3;
+const WAYPOINT_EXACT = 0.02;
 /** Collision body used against blocked tiles (capped so big units still fit through 1-tile gaps). */
 const MAX_COLLISION_RADIUS = 0.34;
 /** Largest unit radius (behemoth); separation queries widen by it. */
 const MAX_UNIT_RADIUS = 0.8;
 /** Max separation displacement per tick. */
 const MAX_PUSH = 0.12;
+/** A tick counts as stuck when the unit got closer to the point it heads for by less than this share of its step. */
+const STUCK_PROGRESS = 0.2;
 /** Stuck handling: stop when stuck close to the goal, repath periodically, give up eventually. */
 const STUCK_NEAR_GOAL_TICKS = 20;
 const STUCK_REPATH_TICKS = 60;
 const STUCK_GIVE_UP_TICKS = 200;
 /** Mass multiplier for soldiers on hold so they keep their position. */
 const HOLD_MASS = 10;
+/** Two moving units both stuck this long stop splitting their push by mass (see movementSystem). */
+const JAM_TICKS = 3;
 
 /** Sends a unit along an A* path to (x, y); if unreachable, to the closest reachable tile. */
 export function moveUnitTo(game: Game, unit: Unit, x: number, y: number): void {
@@ -47,7 +57,7 @@ export function moveUnitTo(game: Game, unit: Unit, x: number, y: number): void {
   if (tiles.length > 0) tiles = tiles.slice(0, -1);
   m.mode = 'path';
   m.goal = goal;
-  m.path = smoothPath(nav, unit.x, unit.y, tiles, Math.min(unit.radius, MAX_COLLISION_RADIUS));
+  m.path = smoothPath(nav, unit.x, unit.y, tiles, collisionRadius(unit));
   m.pathNavVersion = nav.version;
   m.blockedBy = 0;
   m.stuckTicks = 0;
@@ -77,8 +87,16 @@ function isUnit(e: { kind: string }): e is Unit {
   return e.kind === 'survivor' || e.kind === 'soldier' || e.kind === 'mutant';
 }
 
+function collisionRadius(u: Unit): number {
+  return Math.min(u.radius, MAX_COLLISION_RADIUS);
+}
+
 function effectiveMass(u: Unit): number {
   return u.kind === 'soldier' && (u as Soldier).order.type === 'hold' ? u.motion.mass * HOLD_MASS : u.motion.mass;
+}
+
+function jammed(u: Unit): boolean {
+  return u.motion.mode !== 'stand' && u.motion.stuckTicks >= JAM_TICKS;
 }
 
 function cornerBlocked(nav: NavGrid, x: number, y: number): boolean {
@@ -91,7 +109,8 @@ function blockedAt(nav: NavGrid, x: number, y: number, r: number): boolean {
   return cornerBlocked(nav, x - r, y - r) || cornerBlocked(nav, x + r, y - r) || cornerBlocked(nav, x - r, y + r) || cornerBlocked(nav, x + r, y + r);
 }
 
-function desiredVelocity(game: Game, nav: NavGrid, u: Unit): void {
+/** Sets the unit's velocity for this tick; returns the point it heads for (null when not moving on its own). */
+function desiredVelocity(game: Game, nav: NavGrid, u: Unit): Point | null {
   const m: Motion = u.motion;
   const step = m.speed / TICKS_PER_SECOND;
   m.vx = 0;
@@ -101,14 +120,17 @@ function desiredVelocity(game: Game, nav: NavGrid, u: Unit): void {
     if (m.goal && m.pathNavVersion !== nav.version) moveUnitTo(game, u, m.goal.x, m.goal.y);
     while (m.path.length > 0) {
       const w = tileCenter(nav, m.path[0] as number);
-      if (Math.abs(w.x - u.x) + Math.abs(w.y - u.y) > WAYPOINT_REACHED) break;
+      const dw = Math.abs(w.x - u.x) + Math.abs(w.y - u.y);
+      if (dw > WAYPOINT_REACHED) break;
+      const after = m.path.length > 1 ? tileCenter(nav, m.path[1] as number) : m.goal;
+      if (dw > WAYPOINT_EXACT && after && !lineClear(nav, u.x, u.y, after.x, after.y, collisionRadius(u))) break;
       m.path.shift();
     }
     const next = m.path.length > 0 ? m.path[0] : undefined;
     const target = next !== undefined ? tileCenter(nav, next) : m.goal;
     if (!target) {
       m.mode = 'stand';
-      return;
+      return null;
     }
     if (next !== undefined && nav.blocked[next]) m.blockedBy = nav.structureAt[next] as number;
     const dx = target.x - u.x;
@@ -116,19 +138,19 @@ function desiredVelocity(game: Game, nav: NavGrid, u: Unit): void {
     const d = Math.sqrt(dx * dx + dy * dy);
     if (next === undefined && d <= ARRIVE_DISTANCE) {
       stopUnit(u);
-      return;
+      return null;
     }
     const s = Math.min(step, d) / (d || 1);
     m.vx = dx * s;
     m.vy = dy * s;
-    return;
+    return target;
   }
   if (m.mode === 'flow') {
     const t = tileAtPoint(nav, u.x, u.y);
-    if (t === -1) return;
+    if (t === -1) return null;
     const field = u.kind === 'mutant' && u.ai.assaultTargetId !== 0 ? assaultFlow(game, u.ai.assaultTargetId) : nav.flowNext;
     const next = field[t] as number;
-    if (next === -1) return;
+    if (next === -1) return null;
     if (nav.blocked[next]) m.blockedBy = nav.structureAt[next] as number;
     const c = tileCenter(nav, next);
     const dx = c.x - u.x;
@@ -136,7 +158,9 @@ function desiredVelocity(game: Game, nav: NavGrid, u: Unit): void {
     const d = Math.sqrt(dx * dx + dy * dy) || 1;
     m.vx = (dx / d) * step;
     m.vy = (dy / d) * step;
+    return c;
   }
+  return null;
 }
 
 export function movementSystem(game: Game): void {
@@ -146,7 +170,7 @@ export function movementSystem(game: Game): void {
   const slot = new Map<number, number>();
   units.forEach((u, i) => slot.set(u.id, i));
 
-  for (const u of units) desiredVelocity(game, nav, u);
+  const aims = units.map((u) => desiredVelocity(game, nav, u));
 
   // Separation: each overlapping pair once (lower id first), split by mass.
   const pushX = new Float64Array(units.length);
@@ -171,8 +195,12 @@ export function movementSystem(game: Game): void {
       const mb = effectiveMass(e);
       const nx = dx / d;
       const ny = dy / d;
-      const shareA = mb / (ma + mb);
-      const shareB = ma / (ma + mb);
+      // Two units jammed side by side (say at the mouth of a 1-tile lane) push each other off their
+      // way in exactly as hard as they steer into it and stay put; then the lower id keeps its line
+      // and the other takes the whole push.
+      const yieldAll = jammed(a) && jammed(e);
+      const shareA = yieldAll ? 0 : mb / (ma + mb);
+      const shareB = yieldAll ? 1 : ma / (ma + mb);
       pushX[i]! -= nx * overlap * shareA;
       pushY[i]! -= ny * overlap * shareA;
       pushX[j]! += nx * overlap * shareB;
@@ -189,7 +217,7 @@ export function movementSystem(game: Game): void {
       px *= MAX_PUSH / pl;
       py *= MAX_PUSH / pl;
     }
-    const r = Math.min(u.radius, MAX_COLLISION_RADIUS);
+    const r = collisionRadius(u);
     const free = blockedAt(nav, u.x, u.y, r); // already overlapping a blocked tile: let it escape
     const ox = u.x;
     const oy = u.y;
@@ -200,10 +228,13 @@ export function movementSystem(game: Game): void {
     u.x = Math.min(nav.width - r, Math.max(r, u.x));
     u.y = Math.min(nav.height - r, Math.max(r, u.y));
 
+    const aim = aims[i];
+    if (aim) {
+      const before = Math.sqrt((aim.x - ox) * (aim.x - ox) + (aim.y - oy) * (aim.y - oy));
+      const after = Math.sqrt((aim.x - u.x) * (aim.x - u.x) + (aim.y - u.y) * (aim.y - u.y));
+      m.stuckTicks = before - after < (m.speed / TICKS_PER_SECOND) * STUCK_PROGRESS ? m.stuckTicks + 1 : 0;
+    }
     if (m.mode === 'path' && m.goal) {
-      const step = m.speed / TICKS_PER_SECOND;
-      const moved = Math.abs(u.x - ox) + Math.abs(u.y - oy);
-      m.stuckTicks = moved < step * 0.2 ? m.stuckTicks + 1 : 0;
       const gd = Math.abs(m.goal.x - u.x) + Math.abs(m.goal.y - u.y);
       if (m.stuckTicks > STUCK_NEAR_GOAL_TICKS && m.path.length === 0 && gd < 1.5) stopUnit(u);
       else if (m.stuckTicks > STUCK_GIVE_UP_TICKS) stopUnit(u);

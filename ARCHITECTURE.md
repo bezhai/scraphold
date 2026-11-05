@@ -261,6 +261,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 - 单位寻路：`moveUnitTo(game, unit, x, y)`（A*，8 方向，不切角，路径平滑；目标不可达时走到最近的可达格）、`stopUnit`、`followFlowField`。路线上新放了建筑会自动重算。
 - 流场：从核心占地出发的 Dijkstra。玩家建筑格可以通过但每格加 5000 的代价，所以只要还有通路怪物就会绕路，被完全围死时会选穿过最少建筑的路线，这时 `motion.blockedBy` 指向挡路的建筑（被围时是路障，走到核心旁时是核心）。巢穴格不可通过。
 - 移动系统每 tick：算期望速度 → 所有单位之间按质量分离（敌我也互相挡，盾卫可以堵住疾行者；`hold` 的士兵质量乘 10）→ 按轴滑动地避开挡路格。
+- 拐角和卡住：单位离路点 0.3 格（曼哈顿距离）以内时，只有碰撞体从当前位置到再下一个点的直线不碰挡路格（`lineClear`）才跳到下一个路点，否则继续走向这个路点（到 0.02 格以内一律算走过），所以在 1 格宽的通道口不会切角卡在建筑角上。一个 tick 里离当前目标点（路点、终点或流场的下一格）近了不到一步的 20% 就记为卡住一次（`stuckTicks`，路径和流场模式都算，前进一次清零）；路径模式连续卡住 60 tick 重算路径，超过 200 tick 停下。两个都在移动、都已卡住至少 3 tick 的单位重叠时不按质量分推力，id 小的保持路线、id 大的承担全部推力，否则两者把对方推离通道中线的力和自己走回中线的力正好抵消，会一直卡住。
 - 空间索引（`world/spatial.ts`）：`forEachInRadius`、`findNearest`（距离相同取 id 小的）、`edgeDistance`。不收录 hp ≤ 0 的实体和在建筑里的幸存者。`forEachInRadius` 的最后一个参数 `maxExtent` 是查询要覆盖的最大实体半径，默认是包括建筑在内的最大值；只关心单位的查询（移动系统的分离）传 `MAX_UNIT_RADIUS`，少扫一圈格子，结果不变。
 - 迷雾（`world/fog.ts`）：玩家实体按 `vision + global.visionAdd` 点亮圆形区域；首次探索按地形计入 `stats.exploredTerrain`（“发现油渍”灵感用它）；巢穴第一次被看见时 `discovered = true` 并发 `nestDiscovered`。`revealCircle` 给遗迹“揭开一片地图”的奖励用。
 - 实体工厂（`world/entities.ts`）不做任何规则检查（不扣资源、不查解锁）。`enterBuilding`/`exitBuilding` 维护 `insideId` 和 `workers`；移除建筑时里面的工人被放到旁边的空格并变为空闲。工位上限等规则由任务 2 在调用前检查。
