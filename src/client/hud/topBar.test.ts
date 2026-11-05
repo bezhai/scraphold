@@ -30,10 +30,11 @@ describe('foodBalance', () => {
 });
 
 describe('populationReadout', () => {
-  it('counts survivors by task, soldiers, recruits in training, and housing', () => {
+  it('counts survivors by task (waiting for orders counts as idle), soldiers, recruits in training, and housing', () => {
     const w = buildTestWorld();
     w.survivor1.insideId = w.greenhouse.id;
     w.survivor1.task = { type: 'work', buildingId: w.greenhouse.id };
+    w.survivor2.task = { type: 'wait' };
     w.game.state.economy.housingCap = 10;
     (w.barracks.trainQueue as { unit: 'rifleman'; progress: number; total: number }[]).push({ unit: 'rifleman', progress: 0, total: 200 });
     expect(populationReadout(w.game.state)).toEqual({
@@ -62,8 +63,8 @@ describe('growthReadout', () => {
 describe('population hover cards', () => {
   const pop = { survivors: 7, working: 3, repairing: 1, idle: 3, soldiers: 4, training: 1, people: 12, housingCap: 14 };
 
-  it('survivors: how many are idle, what training and work take', () => {
-    expect(survivorsTip(pop)).toBe('幸存者 7 人，其中 3 人空闲（没派去工作）。训练一名士兵要占用一名空闲幸存者，派幸存者进建筑工作才有产出。按 G 选中所有空闲幸存者。');
+  it('survivors: how many are idle or waiting for orders, whom training takes, what G selects', () => {
+    expect(survivorsTip(pop)).toBe('幸存者 7 人，其中 3 人空闲或等待命令。每训练一名士兵，从自动管理的幸存者里调走一人。按 G 选中空闲或等待命令的幸存者。');
   });
 
   it('population / housing: who counts (populationCount) and that housing only caps natural growth', () => {

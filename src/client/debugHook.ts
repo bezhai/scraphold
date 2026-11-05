@@ -64,6 +64,7 @@ function debugApi(session: Session, profile: FrameProfile, renderer: DebugRender
             sy: s.y,
             hp: e.hp,
             task: e.kind === 'survivor' ? e.task.type : null,
+            control: e.kind === 'survivor' || e.kind === 'soldier' ? e.control : null,
             insideId: e.kind === 'survivor' ? e.insideId : null,
             constructing: e.kind === 'building' ? e.construction !== null : null,
             queue: e.kind === 'building' ? e.trainQueue.length : null,

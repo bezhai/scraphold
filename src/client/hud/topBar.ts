@@ -35,6 +35,7 @@ export interface PopulationReadout {
   survivors: number;
   working: number;
   repairing: number;
+  /** Neither working nor repairing: idle, or waiting for orders after being pulled out of a building (what G selects). */
   idle: number;
   soldiers: number;
   /** Recruits in training queues: they already left the survivor pool. */
@@ -74,7 +75,7 @@ export function populationReadout(state: Game['state']): PopulationReadout {
 
 /** Hover card of the survivors readout. */
 export function survivorsTip(pop: PopulationReadout): string {
-  return `幸存者 ${pop.survivors} 人，其中 ${pop.idle} 人空闲（没派去工作）。训练一名士兵要占用一名空闲幸存者，派幸存者进建筑工作才有产出。按 G 选中所有空闲幸存者。`;
+  return `幸存者 ${pop.survivors} 人，其中 ${pop.idle} 人空闲或等待命令。每训练一名士兵，从自动管理的幸存者里调走一人。按 G 选中空闲或等待命令的幸存者。`;
 }
 
 /** Hover card of the population / housing readout: people is the simulation's populationCount; housing only caps natural growth. */

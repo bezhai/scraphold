@@ -3,8 +3,9 @@
  * and glowing unexplored ruins, ground marks and corpses, soft shadows cast by the sun of the hour,
  * structures (cached bodies plus their live layer), identity and selection rings, units posed by
  * facing and animation frame, the fog of war, the day / dusk / night light map with its lights,
- * glowing eyes and acid at night, combat effects, the overlays that explain the game state, and
- * on a rust storm night the blowing sand over everything but the screen markers.
+ * glowing eyes and acid at night, combat effects, the overlays that explain the game state (among
+ * them the flag over every unit under the player's command), and on a rust storm night the blowing
+ * sand over everything but the screen markers.
  */
 import { workerSlots, type GameView } from '../../sim';
 import { MUTANTS, SOLDIERS, type MutantType, type SoldierType } from '../../sim/data/combat';
@@ -22,7 +23,9 @@ import { ambientAt, createShadeLayer, glowSprite, nightWeather, stormLevel, sunA
 import { objectiveMarkers } from './objectiveMarkers';
 import {
   drawBossRing,
+  commandFlags,
   drawBroadcastPulseRings,
+  drawCommandFlags,
   drawDragBox,
   drawGhost,
   drawGhostLabel,
@@ -286,7 +289,7 @@ export function createRenderer(canvas: HTMLCanvasElement, view: GameView): Rende
       const moving = e.motion.vx * e.motion.vx + e.motion.vy * e.motion.vy > 0.000004;
       const pose = poseOf(e, p.x, p.y, v, now, moving);
       const d = drawDiameter(subject);
-      marks.set(e.id, { x: p.x, y: p.y, d, player: e.faction === 'player' });
+      marks.set(e.id, { x: p.x, y: p.y, d, player: e.faction === 'player', commanded: (e.kind === 'soldier' || e.kind === 'survivor') && e.control === 'player' });
       drawn.push({ e, subject, x: p.x, y: p.y, bucket: pose.bucket, moving });
     }
     drawUnitShadows(ctx, drawn, sun);
@@ -334,6 +337,7 @@ export function createRenderer(canvas: HTMLCanvasElement, view: GameView): Rende
     drawRally(ctx, session, v, px, now);
     drawStructureMarks(ctx, v, selected, hovered, px);
     drawRanges(ctx, session, v, selected, hovered, marks, px);
+    drawCommandFlags(ctx, commandFlags([...marks.values()], px), px);
     drawHealthBars(ctx, v, selected, hovered, marks, bounds, px);
     drawBroadcastPulseRings(ctx, v, now);
     if (session.placing && session.hover) drawGhost(ctx, session, px, now);

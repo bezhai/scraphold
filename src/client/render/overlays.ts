@@ -3,7 +3,8 @@
  * units, selection corners on structures, weapon and vision ranges, HP bars (only when damaged
  * or selected), the rally flag, the placement ghost with its bonus tiles and label, where
  * tonight's attack comes from or is now, incident targets, the relay and the hive, the drag box,
- * veteran / boss marks and the rings of a broadcasting signal tower.
+ * veteran / boss marks, the flag over units under the player's command and the rings of a
+ * broadcasting signal tower.
  */
 import { mutantWeapon, soldierWeapon, towerWeapon, towerWeaponOfType, visionRadius, type GameView } from '../../sim';
 import { BUILDINGS } from '../../sim/data/economy';
@@ -28,6 +29,8 @@ export interface UnitMark {
   /** Drawn body diameter in tiles. */
   d: number;
   player: boolean;
+  /** A player unit under the player's command (its `control` is 'player'): it gets the command flag. */
+  commanded: boolean;
 }
 
 const identityRings = createPixelSprites({ maxEntries: 120, perFrame: 12 });
@@ -78,6 +81,75 @@ export function drawUnitRings(g: Ctx, marks: readonly UnitMark[], selected: read
     g.strokeStyle = m.player ? COLORS.accent : COLORS.danger;
     g.stroke();
   }
+}
+
+/** Height of a health bar in screen pixels. */
+const BAR_PX = 4;
+
+/** The health bar over a unit, in tiles. */
+export function unitBarRect(m: UnitMark, px: number): { x: number; y: number; w: number; h: number } {
+  const w = Math.max(0.5, m.d * 0.85);
+  return { x: m.x - w / 2, y: m.y - m.d * 0.5 - 0.2, w, h: BAR_PX * px };
+}
+
+/**
+ * A pennant on a short pole beside a unit under the player's command, in tiles: the pole stands at
+ * the unit's left, just outside its health bar, and the pennant flies away from the unit, so neither
+ * covers the bar nor the veteran star at the upper right.
+ */
+export interface CommandFlag {
+  /** The pole. */
+  x: number;
+  baseY: number;
+  topY: number;
+  /** The pennant: from the top of the pole to its tip, back to the pole at lowY. */
+  tipX: number;
+  tipY: number;
+  lowY: number;
+}
+
+/** Flag size unit in tiles at the default zoom; never under FLAG_MIN_PX screen pixels when zoomed out. */
+const FLAG_UNIT = 0.19;
+const FLAG_MIN_PX = 5.5;
+
+export function commandFlags(marks: readonly UnitMark[], px: number): CommandFlag[] {
+  const s = Math.max(FLAG_UNIT, FLAG_MIN_PX * px);
+  const flags: CommandFlag[] = [];
+  for (const m of marks) {
+    if (!m.commanded) continue;
+    const x = Math.min(m.x - m.d * 0.5, unitBarRect(m, px).x - 2 * px);
+    const baseY = m.y - m.d * 0.05;
+    const topY = baseY - 2 * s;
+    flags.push({ x, baseY, topY, tipX: x - 1.3 * s, tipY: topY + 0.42 * s, lowY: topY + 0.85 * s });
+  }
+  return flags;
+}
+
+/** The command flags, batched: dark poles, then orange pennants with the shared outline. Drawn over the light map, like the health bars. */
+export function drawCommandFlags(g: Ctx, flags: readonly CommandFlag[], px: number): void {
+  if (flags.length === 0) return;
+  g.lineCap = 'round';
+  g.strokeStyle = COLORS.outline;
+  g.lineWidth = Math.max(2 * px, 0.045);
+  g.beginPath();
+  for (const f of flags) {
+    g.moveTo(f.x, f.baseY);
+    g.lineTo(f.x, f.topY);
+  }
+  g.stroke();
+  g.lineCap = 'butt';
+  g.beginPath();
+  for (const f of flags) {
+    g.moveTo(f.x, f.topY);
+    g.lineTo(f.tipX, f.tipY);
+    g.lineTo(f.x, f.lowY);
+    g.closePath();
+  }
+  g.fillStyle = COLORS.accent;
+  g.fill();
+  g.lineJoin = 'round';
+  g.lineWidth = Math.max(0.8 * px, 0.025);
+  g.stroke();
 }
 
 export function drawBossRing(g: Ctx, x: number, y: number, d: number, now: number): void {
@@ -285,7 +357,7 @@ export function drawHealthBars(
   bounds: { x0: number; y0: number; x1: number; y1: number },
   px: number,
 ): void {
-  const h = 4 * px;
+  const h = BAR_PX * px;
   const bars: Bar[] = [];
   for (const e of v.entities.values()) {
     if (e.hp <= 0) continue;
@@ -303,8 +375,8 @@ export function drawHealthBars(
     const m = units.get(e.id);
     if (!m) continue;
     if (!(e.hp < e.maxHp || always)) continue;
-    const w = Math.max(0.5, m.d * 0.85);
-    bars.push({ x: m.x - w / 2, y: m.y - m.d * 0.5 - 0.2, w, fraction: e.hp / e.maxHp, color: e.faction === 'player' ? hpColor(e.hp / e.maxHp) : COLORS.danger });
+    const r = unitBarRect(m, px);
+    bars.push({ x: r.x, y: r.y, w: r.w, fraction: e.hp / e.maxHp, color: e.faction === 'player' ? hpColor(e.hp / e.maxHp) : COLORS.danger });
   }
   drawBars(g, bars, h, px);
 }

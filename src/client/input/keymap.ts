@@ -54,6 +54,12 @@ export function buildHotkeyLabel(building: BuildingType): string | null {
   return code ? code.slice(3) : null;
 }
 
+/** What X and H do, on the help page and on the selection panel's buttons (docs/narrative.md「单位控制」). */
+export const ORDER_KEY_TEXT = {
+  stop: '停止；选中的单位转回自动管理',
+  hold: '原地坚守，一直保持，直到下新命令或按 X',
+} as const;
+
 const PLAIN_KEYS: Readonly<Record<string, KeyAction>> = {
   Space: { type: 'togglePause' },
   Escape: { type: 'cancel' },

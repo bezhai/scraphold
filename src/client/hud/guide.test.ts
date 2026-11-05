@@ -12,8 +12,8 @@ describe('firstDayGuide', () => {
   it('lists the steps covering days 1 to 3; buildings the game started with do not count as built', () => {
     const w = buildTestWorld();
     const g = firstDayGuide(w.game.state, NOT_SEEN);
-    expect(g?.steps.map((s) => s.id)).toEqual(['produce', 'staff', 'barracks', 'train', 'calendar', 'forecast', 'survive', 'incident', 'relay']);
-    expect(done(w.game)).toEqual({ produce: false, staff: false, barracks: true, train: false, forecast: false, survive: false, calendar: false, incident: false, relay: false });
+    expect(g?.steps.map((s) => s.id)).toEqual(['produce', 'barracks', 'train', 'calendar', 'forecast', 'survive', 'incident', 'relay']);
+    expect(done(w.game)).toEqual({ produce: false, barracks: true, train: false, forecast: false, survive: false, calendar: false, incident: false, relay: false });
     expect(g?.next).toBe('produce');
     expect(g?.doneCount).toBe(1);
   });
@@ -21,12 +21,11 @@ describe('firstDayGuide', () => {
   it('ticks steps off from the state as the player does them', () => {
     const w = buildTestWorld();
     addBuilding(w.game, 'salvageYard', 20, 0, { complete: false });
-    w.survivor1.task = { type: 'work', buildingId: w.greenhouse.id };
     (w.barracks.trainQueue as unknown[]).push({ unit: 'rifleman', progress: 0, total: 100, paid: {} });
-    expect(done(w.game)).toMatchObject({ produce: true, staff: true, train: true, forecast: false });
+    expect(done(w.game)).toMatchObject({ produce: true, train: true, forecast: false });
     expect(firstDayGuide(w.game.state, NOT_SEEN)?.next).toBe('calendar');
     expect(firstDayGuide(w.game.state, { calendarSeen: true })?.next).toBe('forecast');
-    expect(firstDayGuide(w.game.state, NOT_SEEN)?.doneCount).toBe(4);
+    expect(firstDayGuide(w.game.state, NOT_SEEN)?.doneCount).toBe(3);
     w.game.state.clock = clockAt(1300);
     expect(done(w.game)).toMatchObject({ forecast: true, survive: false });
   });
@@ -48,6 +47,8 @@ describe('firstDayGuide', () => {
   it('new steps use the finalized wording, with no compass direction', () => {
     const w = buildTestWorld();
     const text = Object.fromEntries((firstDayGuide(w.game.state, NOT_SEEN)?.steps ?? []).map((s) => [s.id, s.text]));
+    expect(text.train).toBe('选中兵营训练士兵。每训练一名士兵，从自动管理的幸存者里调走一人');
+    expect(text.forecast).toBe('黄昏看右上角的侦察报告，有夜袭时红色箭头会指出怪物从哪边来，自动管理的士兵会移过去。想自己布置：选中士兵，右键地面，再按 H 原地坚守');
     expect(text.calendar).toBe('顶栏的日历显示今晚和之后 3 晚是什么夜，悬停看每种夜的说明。');
     expect(text.incident).toBe('事件卡弹出时游戏会停住。天黑前没处理，会按最后一个选项结算。');
     expect(text.relay).toBe('派斥候探索迷雾，找到中继站；研究"旧频段破译"以后就能在那里修信号塔。');
@@ -71,7 +72,6 @@ describe('firstDayGuide', () => {
     expect(firstDayGuide(w.game.state, { calendarSeen: true })).not.toBeNull();
     w.game.state.stats.buildingsBuilt.greenhouse = 1;
     w.game.state.stats.soldiersTrained.rifleman = 1;
-    w.survivor1.task = { type: 'work', buildingId: w.greenhouse.id };
     w.game.state.incidents.history.push({ id: 1, definitionId: 'caravan', raisedTick: 100, resolvedTick: 200, choiceId: 'fuel', automatic: false });
     w.game.state.signal.discovered = true;
     expect(firstDayGuide(w.game.state, { calendarSeen: true })).toBeNull();

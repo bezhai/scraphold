@@ -66,7 +66,7 @@ export function logLineForEvent(view: GameView, event: GameEvent): LogLine | nul
   switch (event.type) {
     case 'phaseChanged':
       if (event.phase === 'night') return line(`第 ${event.day} 夜开始`, 'danger');
-      if (event.phase === 'dusk') return line('黄昏：夜晚即将来临。把士兵摆到来袭方向，空闲的幸存者派进建筑', 'warn');
+      if (event.phase === 'dusk') return line('黄昏：今晚的侦察报告在右上角', 'warn');
       return line(event.day === 1 ? '第 1 天' : `第 ${event.day} 天 · 天亮了`, 'info');
     case 'forecastReady': {
       // Dense fog hides the directions and a storm night has no attack: nothing to look at.

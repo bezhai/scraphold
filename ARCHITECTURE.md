@@ -12,7 +12,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 | `pnpm test` | Vitest，测试文件放在被测文件旁边，命名 `*.test.ts(x)`，只收 `src/**` |
 | `pnpm sim --seed S --days N [--origin O] [--difficulty D] [--bot B] [--json]` | 无头跑 N 个完整昼夜，打印摘要和状态哈希 |
 | `pnpm dev` / `pnpm build` / `pnpm preview` | 客户端开发、构建（`base: './'`，产物可离线打开） |
-| `pnpm e2e` | Playwright：先 `vite build`，再用 `vite preview` 在 4317 端口服务产物。`gameFlow`（开局到第一夜的界面流程、HUD 面板和菜单）、`firstDays`（用真实鼠标键盘玩到第 3 天，途中弹出的事件卡像玩家一样点选项回答）、`v2Flow`（第二版：看日历、找到中继站、处理第一个白天事件、刷新后继续、撤退、顶栏排版、HUD 遮挡率，以及目标点、特殊遗迹、信号塔、锈风暴夜、浓雾夜和四种结算的截图）、`renderPerf`（渲染压力）、`livePerf`（真实模拟下 300 只怪物加 80 个士兵的帧率）、`fullGame`（经济机器人在 3 倍速下通过真实客户端打满 20 夜，约 13 分钟，最终哈希与同一机器人的无头运行一致）。开局、关介绍卡、回答事件卡这些公共步骤在 `e2e/support.ts`。截图存 `e2e/screenshots/` |
+| `pnpm e2e` | Playwright：先 `vite build`，再用 `vite preview` 在 4317 端口服务产物。`gameFlow`（开局到第一夜的界面流程、HUD 面板和菜单）、`firstDays`（用真实鼠标键盘玩到第 3 天，途中弹出的事件卡像玩家一样点选项回答）、`v2Flow`（第二版：看日历、找到中继站、处理第一个白天事件、刷新后继续、撤退、顶栏排版、HUD 遮挡率，以及目标点、特殊遗迹、信号塔、锈风暴夜、浓雾夜和四种结算的截图）、`unitControl`（第三版：士兵和幸存者的控制归属行、X 交还、移动到达后自动交回、混合多选、撤工后用 G 选中再派工）、`renderPerf`（渲染压力）、`livePerf`（真实模拟下 300 只怪物加 80 个士兵的帧率）、`fullGame`（经济机器人在 3 倍速下通过真实客户端打满 20 夜，约 13 分钟，最终哈希与同一机器人的无头运行一致）。开局、关介绍卡、回答事件卡这些公共步骤在 `e2e/support.ts`。截图存 `e2e/screenshots/` |
 | `pnpm exec playwright test -c playwright.art.config.ts` | 美术检查，和主套件分开：构建到 `dist-art/`，在 4319 端口服务。`artScenes`（固定种子的场景截图，带 HUD 和只有世界两种）、`artPerf`（渲染压力，以及缩到最小、整张地图都在视野里时和默认缩放下的实时压力帧率），截图和 `perf.json` 存 `e2e-art/screenshots/` |
 | `pnpm balance [--seeds 20] [--bots ...] [--origins all] [--difficulties normal,hard]` | 机器人批量跑局，按难度和营地特性输出胜率表和 spec 的平衡指标（PASS/FAIL），结果存 `balance/latest.json` |
 | `pnpm trace --bot economy [--seed S] [--origin O] [--difficulty D]` | 跑一局机器人对局，每个黄昏和天亮打印一行，用来观察机器人的行为 |
@@ -318,7 +318,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 ## 客户端结构补充（任务 6）
 
-- 新手引导：`hud/guide.ts` 根据状态算开局的任务清单，共 9 步，覆盖第 1–3 天（生产建筑、派工、兵营、训练、看雾情日历、看预报、守住第 1 夜、处理白天事件、找到中继站）。只有“看日历”模拟层不记录，由 `GameScreen` 在玩家悬停日历时记下（`calendarSeen`）。第 3 天过后或全部完成后消失，玩家也可以手动关闭（`Session.dismissGuide`）；`ui/GuidePanel.tsx` 显示它。`ui/HelpOverlay.tsx` 是说明页（目标、昼夜、资源、人口、防守、按键），由顶栏的“帮助”按钮、F1 或 ? 打开，打开时暂停（`Session.helpOpen`）。科技树和政令面板打开时同样停住时间（`Session.techOpen`、`policiesOpen`），关闭后保持玩家原来的暂停状态。
+- 新手引导：`hud/guide.ts` 根据状态算开局的任务清单，共 8 步，覆盖第 1–3 天（生产建筑、兵营、训练、看雾情日历、看预报、守住第 1 夜、处理白天事件、找到中继站）。只有“看日历”模拟层不记录，由 `GameScreen` 在玩家悬停日历时记下（`calendarSeen`）。第三版删掉了“派幸存者进去工作”一步，因为幸存者默认由幸存者 AI 分配；其余各步的完成条件不受自动派工影响。第 3 天过后或全部完成后消失，玩家也可以手动关闭（`Session.dismissGuide`）；`ui/GuidePanel.tsx` 显示它。`ui/HelpOverlay.tsx` 是说明页（目标、昼夜、资源、人口、防守、按键），由顶栏的“帮助”按钮、F1 或 ? 打开，打开时暂停（`Session.helpOpen`）。科技树和政令面板打开时同样停住时间（`Session.techOpen`、`policiesOpen`），关闭后保持玩家原来的暂停状态。
 - 威胁标记：`hud/threatMarkers.ts` 在黄昏给出预报的出生点，在夜里把正在进攻的怪物按核心周围的方位分组（`compassDirection`），渲染器在屏幕边缘画指向它们的箭头和“方向 · 数量”标签（落点见“边缘箭头”）；目标在屏幕内时改成在原地画一个闪烁的圆圈，夜里的怪物只在藏在迷雾里时才画。
 - 地形提示：`hud/terrainHint.ts` 给鼠标下的格子一行“地形名：适合做什么”，显示在左下角。
 - 框选：框里有士兵时只选士兵（`input/selection.ts`）。
@@ -326,7 +326,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 ## 美术改版（界面部分）
 
-美术规范在 `docs/art-direction.md`，画布调色板 `render/palette.ts` 和 `styles.css` 开头的 CSS 变量使用同一组色值。界面的几条行为约定：选中面板只在有东西被选中时出现；顶栏的“工人”格可以点击，等同按 G 选中空闲幸存者；事件日志收起时只显示最近 4 条，按游戏时间显示 15 秒后用 5 秒淡出（暂停时不消失），点“事件”展开最近 12 条（`hud/eventLog.ts`）；开局指引在建造栏上方，可以折叠到只剩下一步，也可以关闭（`hud/guide.ts`、`ui/GuidePanel.tsx`）。帮助页的地形色块读 `render/palette.ts` 的键，开始界面的背景调用渲染层的 `renderTerrain` 和 `drawBuilding`，改这些名字或签名时要同步改界面。
+美术规范在 `docs/art-direction.md`，画布调色板 `render/palette.ts` 和 `styles.css` 开头的 CSS 变量使用同一组色值。界面的几条行为约定：选中面板只在有东西被选中时出现；顶栏的“工人”格可以点击，等同按 G 选中空闲或等待命令的幸存者；事件日志收起时只显示最近 4 条，按游戏时间显示 15 秒后用 5 秒淡出（暂停时不消失），点“事件”展开最近 12 条（`hud/eventLog.ts`）；开局指引在建造栏上方，可以折叠到只剩下一步，也可以关闭（`hud/guide.ts`、`ui/GuidePanel.tsx`）。帮助页的地形色块读 `render/palette.ts` 的键，开始界面的背景调用渲染层的 `renderTerrain` 和 `drawBuilding`，改这些名字或签名时要同步改界面。
 
 ## 第二版客户端实现（任务 5）
 
@@ -346,13 +346,13 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
   - `effectLights` 每帧最多给 `MAX_EFFECT_LIGHTS`（16）个特效发光：先剔除光照范围碰不到屏幕的，再按强度乘半径取最大的 16 个。每个光源都要在光照层上画一次光晕，大战里同时有上百个枪口火光和爆炸，不设上限时这一步随特效数量线性变慢；被舍弃的是最弱的光，画面上几乎看不出差别。建筑、巢穴、遗迹的光不受这个上限限制，它们数量有限，也是夜里辨认据点的依据。
   - 分段计时在 `render/sectionTimer.ts`，记录渲染器每段上一帧花的毫秒数，通过 debug 钩子的 `profile().render` 读取。Canvas 2D 的绘制调用大多只是把命令记下来，真正的光栅化在 `draw()` 返回之后、最晚在这一帧上屏时才做，所以默认的分段时间不含像素工作量。`Renderer.rasterizeSections` 默认关闭，可以用 debug 钩子的 `rasterizeSections(true)` 打开（只在 `?debug` 时可用）：打开后每段读时钟前先读回 1 个像素（`getImageData`），逼画布把这一段画的东西光栅化完，于是每段时间包含它自己的像素工作量。读回会让绘制流水线停顿、掉帧，测帧率时要关掉。
   - 帧率背景：这台机器上 Playwright 的 Chromium 用软件光栅化画 2D canvas（WebGL 渲染器报告的是 SwiftShader），所以像素填充量直接决定帧率。美术 e2e `artPerf` 的默认缩放实时压力（缩放 44，300 只怪物加 80 个士兵，3 倍速）在本节这些修复之前是 47–49 fps，修复后 55.8–57.4 fps。
-- **撤退**：选中士兵时面板里有“撤退回炉心 (K)”按钮，K 键效果相同。它对选中的士兵下一条移动到炉心中心的 `move` 指令（和 Ctrl+右键是同一种指令，途中不交战），由模拟层的编队落点把士兵摆在炉心周围；e2e 实测士兵停在离炉心中心约 2 格。
+- **撤退**：选中士兵时面板里有“撤退回炉心 (K)”按钮，K 键效果相同。它对选中的士兵下一条移动到炉心中心的 `move` 指令（和 Ctrl+右键是同一种指令，途中不交战），由模拟层的编队落点把士兵摆在炉心周围；e2e 实测士兵停在离炉心中心约 2 格。第三版起撤退是有终点的命令：士兵到达后转回自动管理，夜里会被士兵 AI 带回布防位置；想让士兵留在炉心，到达后按 H。血量低于阈值的士兵由士兵 AI 自己撤回炉心。
 - **开局介绍卡**（`ui/IntroCard.tsx`）：新开的一局（第 1 天、tick 0）先显示世界观介绍卡，文字取自 narrative.md。卡片打开时时间停住，点“进入据点”或按空格、Enter、Esc 关闭（按钮调 `Session.closeIntroCard`，按键是 `closeIntroCard` 动作）。卡片是模态的：打开时其他快捷键和镜头平移都不生效，和事件卡用同一处拦截（`Session.modalCard`，见“白天事件卡”）。读档继续的局不显示。
-- **顶栏和人口读数**（`ui/TopBar.tsx`、`hud/topBar.ts`）：顶栏在 1440×900 和 1280×800 下都是一行，高 40px，不溢出、不换行、按钮不出屏（`v2Flow` 检查）。窗口宽度不到 1440px 时，隐藏资源产出的“/分”单位、天数后的“/20”、口粮结余小块（饥饿提示照常显示）和速度区按钮上的按键提示。这个阈值原来是 1366px，但完整布局在 1366px 宽时已经溢出 10px；顶栏加了全屏按钮后，完整布局需要约 1411px，所以阈值提到 1440px，1440px 宽时完整布局还剩约 29px。幸存者读数是大字总数加小字“幸存者（空闲 n）”，人口读数是“人口/住房上限”，两者的悬停说明按模拟层规则写：训练士兵占用一名空闲幸存者；住房只限制自然增长，建棚屋提高上限。
+- **顶栏和人口读数**（`ui/TopBar.tsx`、`hud/topBar.ts`）：顶栏在 1440×900 和 1280×800 下都是一行，高 40px，不溢出、不换行、按钮不出屏（`v2Flow` 检查）。窗口宽度不到 1440px 时，隐藏资源产出的“/分”单位、天数后的“/20”、口粮结余小块（饥饿提示照常显示）和速度区按钮上的按键提示。这个阈值原来是 1366px，但完整布局在 1366px 宽时已经溢出 10px；顶栏加了全屏按钮后，完整布局需要约 1411px，所以阈值提到 1440px，1440px 宽时完整布局还剩约 29px。幸存者读数是大字总数加小字“幸存者（空闲 n）”，人口读数是“人口/住房上限”，两者的悬停说明按模拟层规则写：训练士兵从自动管理的幸存者里调走一人（第三版之前是占用一名空闲幸存者），“空闲”数包含等待命令的幸存者；住房只限制自然增长，建棚屋提高上限。
 - **镜头**（`camera.ts`、`input/domInput.ts`、`ui/FullscreenButton.tsx`）：默认缩放 44 像素/格，最大 `MAX_ZOOM` 80。最小缩放由 `minZoom` 按视口计算：整张地图放进视口，四边各留 `FIT_MARGIN_PX`（56px），这样顶栏（离顶 8px、高 40px）不会盖住地图最上面几行；96×72 的地图在 1440×900 下约 10.9，在 1920×1080 下约 13.4。底部的小地图列、指引和建造栏、左侧事件日志不计入留白：它们只占角落和侧边，算进去地图会缩得很小，而且这些面板随选中和指引展开而变化，最小缩放会跟着跳。窗口变大（例如进入全屏）时最小缩放随之提高，`resizeView` 会把缩放和镜头中心重新限制到范围内。镜头中心在每条轴上可以离开地图中点，最多偏离地图比视野长出的长度，并且不超过地图边缘：地图至少是视野两倍长时，中心可以到地图边缘，和以前一样能把地图边缘拉到屏幕中间、从 HUD 下面露出来；视野变大时可移动的范围连续收窄，整张地图放得下时地图停在视野正中。因为范围是连续变化的，滚轮缩小时地图平滑地移到中间，不会跳。中键拖动地图时，移动事件在 window 上处理，鼠标经过 HUD 面板或移出画布时拖动继续，松开中键或窗口失焦时结束。顶栏和暂停菜单有全屏按钮，对整个页面调用 Fullscreen API，按钮文字随 `fullscreenchange` 更新，用户按 Esc 或 F11 退出全屏时也会更新；浏览器不支持或不允许全屏时不显示按钮。全屏没有快捷键。
 - **结算**（`hud/endScreen.ts`、`ui/EndScreen.tsx`）：标题和尾声按胜利方式区分，取自 narrative.md「结局」；副标题是“守到了第 21 天”“第 N 天摧毁了母巢”“第 N 天，长明城的车队到了”或“炉心在第 N 天熄灭”。获胜时显示模拟层 `outcome.score` 的分项和总分，失守没有分数。
 - **自动存档**（`storage/autoSave.ts`、`session.ts`、`ui/GameScreen.tsx`、`ui/StartScreen.tsx`）：存在 localStorage 的 `scraphold.autosave.v2`，只存一局。每天天亮（从第 2 天起）和每个黄昏开始的那个 tick 处理完后各存一次，页面隐藏（`visibilitychange` 变为 hidden）或离开（`pagehide`，包括刷新）时再存一次；处理事件后不单独存。已结束的局不存，局结束的那个 tick 删除存档。主菜单显示“继续游戏（第 N 天 · 营地特性）”之前，先用 `restoreGame` 完整校验（格式版本、数据完整、状态哈希一致）；通不过或那一局已经结束，就删掉存档、不显示按钮。“删除存档”按钮清掉它。实测体积约 54 KB（第 1 天）到 125–195 KB（第 14–20 天）。
-- **快捷键**：第二版新增 K（撤退回炉心）、O（胜利目标）、Tab（打开待处理事件，并阻止浏览器用 Tab 切换焦点）；Ctrl+右键是强制移动；事件卡打开时 1–3 选选项，不选编队；开局介绍卡打开时只有空格、Enter、Esc（关闭卡片）生效。第一版曾有的 J 键已删除。帮助页（`ui/HelpOverlay.tsx`）列出全部按键。
+- **快捷键**：第二版新增 K（撤退回炉心）、O（胜利目标）、Tab（打开待处理事件，并阻止浏览器用 Tab 切换焦点）；Ctrl+右键是强制移动；事件卡打开时 1–3 选选项，不选编队；开局介绍卡打开时只有空格、Enter、Esc（关闭卡片）生效。第一版曾有的 J 键已删除。第三版改了三个键的含义：X 停止，并把选中的单位转回自动管理；H 原地坚守，一直保持到下新命令或按 X；G 选中地图上空闲或等待命令的幸存者。帮助页（`ui/HelpOverlay.tsx`）列出全部按键。
 - **HUD 遮挡**：`v2Flow` 在 1440×900 下按各面板的矩形每 4px 采样一次：开局时（开局指引展开、没有选中）约 21.5%，其中开局指引单独约占 9%；选中炉心后约 26%。
 
 ## 第二版任务 6 返工的接口与验收口径
@@ -386,7 +386,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 **控制归属。** `Survivor.control` 和 `Soldier.control` 取 `auto | player`，所有出生途径（`world/entities.ts` 的 `spawnSurvivor/spawnSoldier`）默认 `auto`。任何单位指令（`move`、`attackMove`、`attackTarget`、`hold`、`assignWork`、`repair`）把被命令的单位设为 `player`；`stop`（X）立即交回 `auto`。`unassignWork` 撤出来的幸存者任务是 `wait`（等待命令），保持 `player`，AI 不动，直到玩家下新命令（按新命令的规则交回）或按 X；信号塔建成时撤出的施工队直接变为 `idle` 和 `auto`。有终点的命令结束时由 `world/control.ts` 的 `control` 系统交回：士兵的命令变回 `idle`（移动、攻击移动到达，集火目标消失），幸存者空闲地站在地图上（移动到达或卡住停下、维修完成、目标消失、到达时工位已满、工作的建筑被毁）。`hold`、派工和 `wait` 没有终点，保持 `player`；交回规则只看“空闲（`idle`）且站在地图上”，`wait` 永远不满足，所以两者是不同的任务类型，不靠计时区分。客户端的 K 撤退是移动到炉心，到达后同样交回。事件隔离的幸存者在隔离期间 AI 不动，隔离结束时（`incidents/effects.ts`）设为 `auto`。自动管理的士兵由士兵 AI 安排，见“士兵 AI”。
 
-**指令变化。** `assignWork` 和 `repair` 现在也接受在建筑里工作的幸存者（不含隔离中的），他们先离开原建筑再前往；`move/attackMove/stop` 仍只接受地图上的单位。训练的拒绝原因改名为 `noAutoSurvivor`（“没有自动管理的幸存者可以训练”）。
+**指令变化。** `assignWork` 和 `repair` 现在也接受在建筑里工作的幸存者（不含隔离中的），他们先离开原建筑再前往；`move/attackMove/stop/hold` 也一样：所有单位指令都经 `orders.ts` 的 `ownUnits` 取单位，它接受在建筑里工作、没被隔离的幸存者，指令先让他们离开建筑。训练的拒绝原因改名为 `noAutoSurvivor`（“没有自动管理的幸存者可以训练”）。
 
 **幸存者 AI**（`economy/survivorAi.ts`，参数在 `data/economy.ts` 的 `SURVIVOR_AI`）。只管 `control === 'auto'`、活着、没被隔离的幸存者；玩家指挥的幸存者照样占工位。每 `intervalTicks`（20 tick）决策一次，只用玩家看得到的信息：自己的建筑和库存、已公布的今晚天气、当前可见格上的怪物。不往附近 `enemyClearance`（10 格）内有可见怪物的建筑派人；看到过怪物的建筑要等 `enemyCalmSeconds`（5 秒）内都没再看到才重新派人，正在维修的人在此期间也会被叫回，这样视野边缘忽隐忽现的怪物不会让人来回跑。每座建筑最后一次看到怪物的 tick 存在 `economy.survivorAi.enemySightings`，超过 5 秒的记录在下一轮决策时删除。
 - 锈风暴夜的黄昏和夜里：地图上不在去上班路上的幸存者，进最近的有空工位的建筑（不论产什么，研究站也算），其他决策暂停。
@@ -434,3 +434,15 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 **无头检查脚本。** `economyCheck.ts` 的 builder 不再手动派工，由幸存者 AI 安排；passive 仍在第 0 tick 手动派 3 人进开局废料场，派工没有终点，AI 不会调走他们，产出核对因此不变。
 
 **第三版的调参。** 机器人改为依赖 AI 后，为了让 `balanceAcceptance.ts` 的检查项全部通过，改了三处，原因和对比数据见 `docs/acceptance.md` 第三版一节：幸存者 AI 的粮食只在住房已满时才按过剩减半（`economy/population.ts:housingFull`，和出生判断共用）；信号策略和经济策略一样第 6 天扩军，修塔前的政令先选“丰收庆典”；清巢策略母巢决战期间留守 6 人（原 8 人）。敌人、兵种、经济数值和 `SOLDIER_AI`、`SURVIVOR_AI` 的数值都没有改。
+
+## 第三版客户端（任务 5）
+
+客户端不自己推断单位归谁管，一律读模拟层单位上的 `control`；文案全部照抄 narrative.md「单位控制（第三版）」。
+
+- **归属行**（`hud/selectionPanel.ts`、`ui/SelectionPanel.tsx`）：单选时按 `control` 和当前命令类型选文案：自动管理、由你指挥且命令有终点、派工中、原地坚守、撤工后等待命令（幸存者任务 `wait`）。多选时归属都一样就用同一句，不一样时写“{a} 个自动管理，{b} 个由你指挥”。由你指挥时前面带小旗图标（`ui/Glyphs.tsx` 的 `CommandFlagGlyph`）。
+- **地图小旗**（`render/overlays.ts` 的 `commandFlags`/`drawCommandFlags`，`renderer.ts`）：由玩家指挥的士兵和幸存者左上方画一面橙色小旗，`UnitMark.commanded` 来自 `control`。小旗和血条一样画在光照层之后，夜里也看得清；默认缩放下约 8px，最小缩放时保底 5.5px，位置避开血条和老兵星。
+- **按键说明共用一处**：X、H 的说明文字定义在 `input/keymap.ts` 的 `ORDER_KEY_TEXT`，帮助页和选择面板的停止、原地坚守按钮悬停说明都读它。
+- **派工按钮**：建筑面板的“派一名幸存者”送出模拟层 `nearestAutoSurvivor` 选中的人，和训练消耗幸存者是同一条规则；找不到人时显示“没有自动管理的幸存者”。
+- **G 键**（`session.ts`）：选中地图上空闲或等待命令的幸存者，没有时提示“没有空闲或等待命令的幸存者”。
+- **集结点**：兵营面板写“这个兵营训练的士兵白天在集结点待命。”，含义见“士兵 AI（第三版任务 3）”。
+- **debug 钩子**：`entities()` 多返回 `control` 字段，给 e2e 判断归属。

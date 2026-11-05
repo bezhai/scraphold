@@ -1,9 +1,10 @@
 /**
  * The first days as a player who has read nothing, through the real mouse and keyboard: the
  * opening checklist ticks off as the steps are done (including hovering the fog calendar), F1 and
- * the 帮助 button open the help with time stopped, a greenhouse goes on fertile soil, survivors are
- * put to work, a barracks trains soldiers, the dusk report shows where tonight's attack comes
- * from, soldiers are moved that way, and the game runs through nights 1 and 2 to day 3. Incident
+ * the 帮助 button open the help with time stopped, a greenhouse goes on fertile soil, survivors go
+ * to work without being told (automatic control), a barracks trains soldiers, the dusk report shows
+ * where tonight's attack comes from, soldiers are moved that way, and the game runs through nights 1
+ * and 2 to day 3. Incident
  * cards that pop up on the way (this seed has events on days 2 and 3) are answered like a player
  * does, by clicking an available choice; the checklist then ticks off the incident step. Also
  * checks the old pitfall that a soldier right-clicking a damaged own building only walks there and
@@ -12,6 +13,7 @@
  */
 import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { SURVIVOR_AI } from '../src/sim/data/economy';
 import { answerIncidentCard, collectErrors, playUntil, startGame } from './support';
 
 const SHOTS = 'e2e/screenshots';
@@ -20,7 +22,7 @@ mkdirSync(SHOTS, { recursive: true });
 /** Screen area not covered by the HUD at 1440x900 (top bar, event log, guide, bottom panels). */
 const SAFE = { x0: 380, y0: 110, x1: 1060, y1: 620 };
 
-type DebugEntity = { id: number; kind: string; type: string; sx: number; sy: number; hp: number; task: string | null; insideId: number | null; constructing: boolean | null };
+type DebugEntity = { id: number; kind: string; type: string; sx: number; sy: number; hp: number; task: string | null; control: 'auto' | 'player' | null; insideId: number | null; constructing: boolean | null };
 
 async function entities(page: Page, kind?: string): Promise<DebugEntity[]> {
   return page.evaluate((k) => window.scraphold!.entities(k) as DebugEntity[], kind);
@@ -30,14 +32,14 @@ async function guideDone(page: Page, step: string): Promise<boolean> {
   return (await page.getByTestId(`guide-${step}`).getAttribute('class'))?.includes('done') ?? false;
 }
 
-test('first days as a new player: guide, help, build, staff, train, dusk report, nights 1 and 2', async ({ page }) => {
+test('first days as a new player: guide, help, build, automatic staffing, train, dusk report, nights 1 and 2', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = collectErrors(page);
   await startGame(page, { seed: 'first-days-01' });
 
   await test.step('the opening checklist is there; F1 and the 帮助 button open the help with time stopped', async () => {
     await expect(page.getByTestId('guide')).toBeVisible();
-    await expect(page.getByTestId('guide').locator('li')).toHaveCount(9);
+    await expect(page.getByTestId('guide').locator('li')).toHaveCount(8);
     // Nothing is selected yet, so the bottom edge has no selection panel; the guide folds to its next step and back.
     await expect(page.getByTestId('selection-panel')).toBeHidden();
     await page.getByTestId('guide-toggle').click();
@@ -84,25 +86,11 @@ test('first days as a new player: guide, help, build, staff, train, dusk report,
     await expect.poll(() => guideDone(page, 'produce')).toBe(true);
   });
 
-  await test.step('box-select the survivors and right-click the salvage yard: they go to work', async () => {
+  await test.step('nobody is told to work: the survivors under automatic control fill the salvage yard', async () => {
     const yard = (await entities(page, 'building')).find((b) => b.type === 'salvageYard')!;
-    await page.evaluate((id) => {
-      const s = window.scraphold!.session;
-      const e = s.game.state.entities.get(id)!;
-      s.centerOn(e.x, e.y + 4);
-    }, yard.id);
-    const idle = (await entities(page, 'survivor')).filter((s) => s.task === 'idle' && s.sx > SAFE.x0 && s.sx < SAFE.x1 && s.sy > SAFE.y0 && s.sy < SAFE.y1);
-    expect(idle.length).toBeGreaterThan(0);
-    const xs = idle.map((s) => s.sx);
-    const ys = idle.map((s) => s.sy);
-    await page.mouse.move(Math.min(...xs) - 20, Math.min(...ys) - 20);
-    await page.mouse.down();
-    await page.mouse.move(Math.max(...xs) + 20, Math.max(...ys) + 20, { steps: 6 });
-    await page.mouse.up();
-    await expect(page.getByTestId('selection-panel')).toContainText('右键生产建筑：派去工作');
-    const target = (await entities(page, 'building')).find((b) => b.id === yard.id)!;
-    await page.mouse.click(target.sx, target.sy, { button: 'right' });
-    await expect.poll(() => guideDone(page, 'staff')).toBe(true);
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('paused-banner')).toBeHidden();
+    await expect.poll(async () => (await entities(page, 'survivor')).filter((s) => s.insideId === yard.id && s.control === 'auto').length, { timeout: 30_000 }).toBeGreaterThan(0);
   });
 
   let barracksId = 0;
@@ -130,10 +118,14 @@ test('first days as a new player: guide, help, build, staff, train, dusk report,
   await test.step('pitfall: a soldier right-clicking a damaged own building walks there and never repairs it', async () => {
     await page.keyboard.press('Space');
     const yard = (await entities(page, 'building')).find((b) => b.type === 'salvageYard')!;
-    await page.evaluate((id) => {
-      const e = window.scraphold!.session.game.state.entities.get(id)!;
-      e.hp = e.maxHp - 120;
-    }, yard.id);
+    // Damaged, but less than survivors under automatic control repair (SURVIVOR_AI.repairBelowPct), so nobody else repairs it either.
+    await page.evaluate(
+      ({ id, share }) => {
+        const e = window.scraphold!.session.game.state.entities.get(id)!;
+        e.hp = e.maxHp * share;
+      },
+      { id: yard.id, share: (1 + SURVIVOR_AI.repairBelowPct) / 2 },
+    );
     const soldier = (await entities(page, 'soldier'))[0]!;
     await page.mouse.click(soldier.sx, soldier.sy);
     await expect.poll(() => page.evaluate(() => window.scraphold!.session.selection.length)).toBe(1);

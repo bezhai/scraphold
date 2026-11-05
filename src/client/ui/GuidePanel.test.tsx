@@ -13,11 +13,11 @@ describe('GuidePanel', () => {
     const session = new Session(w.game, { viewW: 1440, viewH: 900 });
     render(<GuidePanel session={session} calendarSeen={false} />);
     const guide = screen.getByTestId('guide');
-    expect(guide.textContent).toContain('1/9');
+    expect(guide.textContent).toContain('1/8');
     expect(screen.getByTestId('guide-barracks').className).toContain('done');
     fireEvent.click(screen.getByTestId('guide-toggle'));
     expect(screen.getByTestId('guide').className).toContain('collapsed');
-    expect(screen.getByTestId('guide').querySelectorAll('li')).toHaveLength(9);
+    expect(screen.getByTestId('guide').querySelectorAll('li')).toHaveLength(8);
     expect(screen.getByTestId('guide-produce').className).toContain('next');
     fireEvent.click(screen.getByTestId('guide-toggle'));
     expect(screen.getByTestId('guide').className).not.toContain('collapsed');
@@ -37,6 +37,6 @@ describe('GuidePanel', () => {
     const session = new Session(w.game, { viewW: 1440, viewH: 900 });
     render(<GuidePanel session={session} calendarSeen={true} />);
     expect(screen.getByTestId('guide-calendar').className).toContain('done');
-    expect(screen.getByTestId('guide').textContent).toContain('2/9');
+    expect(screen.getByTestId('guide').textContent).toContain('2/8');
   });
 });

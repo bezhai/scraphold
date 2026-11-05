@@ -1,8 +1,9 @@
 /**
  * Browser flow: pick an origin → start → place a building → assign a worker → train a unit →
- * reach night 1, with no console errors. Inputs go through the real mouse and keyboard; the
- * `?debug` hook only tells the test where things are on screen and what the state is.
- * Screenshots go to e2e/screenshots/.
+ * reach night 1, with no console errors. Survivors go to work on their own (automatic control); the
+ * worker the player assigns stays at the salvage yard under player control. Inputs go through the
+ * real mouse and keyboard; the `?debug` hook only tells the test where things are on screen and
+ * what the state is. Screenshots go to e2e/screenshots/.
  */
 import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
@@ -18,7 +19,7 @@ mkdirSync(SHOTS, { recursive: true });
  */
 const SAFE = { x0: 380, y0: 90, x1: 1080, y1: 840 };
 
-type DebugEntity = { id: number; kind: string; type: string; sx: number; sy: number; task: string | null; insideId: number | null; constructing: boolean | null; queue: number | null };
+type DebugEntity = { id: number; kind: string; type: string; sx: number; sy: number; task: string | null; control: 'auto' | 'player' | null; insideId: number | null; constructing: boolean | null; queue: number | null };
 
 async function entities(page: Page, kind?: string): Promise<DebugEntity[]> {
   return page.evaluate((k) => window.scraphold!.entities(k) as DebugEntity[], kind);
@@ -76,17 +77,27 @@ test('origin → start → build → assign → train → night 1', async ({ pag
     barracksId = (await entities(page, 'building')).find((b) => b.type === 'barracks')!.id;
   });
 
-  await test.step('assign a worker (select survivor, right-click salvage yard)', async () => {
+  await test.step('assign a worker (pause, select a survivor on the way to work, right-click the salvage yard)', async () => {
+    // Paused, so the survivors still walking to their jobs stay on the map.
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('paused-banner')).toBeVisible();
     const yardId = (await entities(page, 'building')).find((b) => b.type === 'salvageYard')!.id;
     const yard = await centerOn(page, yardId);
+    // Someone already heading to the yard keeps their place there, so the yard cannot be full for them.
+    const headingToYard = new Set(
+      await page.evaluate((id) => [...window.scraphold!.session.game.state.entities.values()].filter((e) => e.kind === 'survivor' && e.task.type === 'work' && e.task.buildingId === id).map((e) => e.id), yardId),
+    );
     const survivor = (await entities(page, 'survivor'))
-      .filter((s) => s.task === 'idle' && s.insideId === 0 && s.sx > SAFE.x0 && s.sx < SAFE.x1 && s.sy > SAFE.y0 && s.sy < SAFE.y1)
+      .filter((s) => s.insideId === 0 && s.control === 'auto' && (s.task === 'idle' || headingToYard.has(s.id)) && s.sx > SAFE.x0 && s.sx < SAFE.x1 && s.sy > SAFE.y0 && s.sy < SAFE.y1)
       .sort((a, b) => Math.hypot(a.sx - yard.sx, a.sy - yard.sy) - Math.hypot(b.sx - yard.sx, b.sy - yard.sy))[0];
-    expect(survivor, 'an idle survivor on screen').toBeTruthy();
+    expect(survivor, 'a survivor under automatic control on screen, idle or walking to the yard').toBeTruthy();
     await page.mouse.click(survivor!.sx, survivor!.sy);
     await expect.poll(() => selection(page)).toEqual([survivor!.id]);
+    await expect(page.getByTestId('control-line')).toHaveText('自动管理');
     await page.mouse.click(yard.sx, yard.sy, { button: 'right' });
     await expect.poll(async () => (await entity(page, survivor!.id)).task).toBe('work');
+    expect((await entity(page, survivor!.id)).control).toBe('player');
+    await expect(page.getByTestId('control-line')).toHaveText('由你指挥，固定在这里工作。按 X 转回自动管理');
   });
 
   await test.step('train a unit (barracks → rifleman)', async () => {

@@ -12,7 +12,7 @@ describe('logLineForEvent', () => {
   it('announces phases', () => {
     const { game } = buildTestWorld();
     expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'night' })).toMatchObject({ text: '第 3 夜开始', tone: 'danger' });
-    expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'dusk' })).toMatchObject({ tone: 'warn' });
+    expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'dusk' })).toMatchObject({ text: '黄昏：今晚的侦察报告在右上角', tone: 'warn' });
     expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 4, phase: 'day' })).toMatchObject({ text: '第 4 天 · 天亮了', tone: 'info' });
     expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 1, phase: 'day' })).toMatchObject({ text: '第 1 天', tone: 'info' });
   });

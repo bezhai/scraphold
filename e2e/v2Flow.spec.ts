@@ -3,7 +3,8 @@
  * to the K-7 relay with a click and a right-click; meet the first daytime incident on a seed whose
  * schedule has one on day 2 (time stops, Esc returns to the player's own pause state, the event
  * log keeps it reopenable, Tab and a digit key answer it, the history records it); reload the page
- * and continue from the autosave; retreat a soldier to the core with the 撤退 button and with K.
+ * and continue from the autosave; retreat a soldier to the core with the 撤退 button and with K (it
+ * goes back to automatic control once there).
  * Layout: the top bar is one row at 1440x900 and 1280x800, and the share of the screen the HUD
  * covers (opening guide included) is measured. Screens for review: incident targets undecided and
  * accepted, the two special ruins, the signal tower being built and broadcasting, a rust storm
@@ -387,7 +388,7 @@ test('reload the page and continue from the autosave', async ({ page }) => {
   expect(errors, 'console errors').toEqual([]);
 });
 
-test('retreat: a selected soldier runs back to the core with the 撤退 button and with K', async ({ page }) => {
+test('retreat: a selected soldier runs back to the core with the 撤退 button and with K, then goes back to automatic control', async ({ page }) => {
   const errors = collectErrors(page);
   await startGame(page, { seed: quietSeed(), origin: 'militia' });
   const core = await page.evaluate(() => {
@@ -409,13 +410,16 @@ test('retreat: a selected soldier runs back to the core with the 撤退 button a
   const settled: number[] = [];
   for (const [k, r] of riflemen.entries()) {
     await selectByClick(page, r.id);
-    // Send it out with Ctrl+right-click (forced move), 10 tiles west of the core.
+    // Send it out with Ctrl+right-click (forced move), 10 tiles west of the core, and hold it there.
     await centerOn(page, { x: core.x - 5, y: core.y });
     const away = await page.evaluate((p) => window.scraphold!.toScreen(p.x, p.y), { x: core.x - 10, y: core.y + (k === 0 ? -2 : 2) });
     await page.keyboard.down('Control');
     await page.mouse.click(away.x, away.y, { button: 'right' });
     await page.keyboard.up('Control');
-    await expect.poll(() => distance(r.id), { timeout: 30_000 }).toBeGreaterThan(8);
+    // A move hands the soldier back to automatic control when it arrives, which walks it home; H keeps it out there.
+    await expect.poll(() => distance(r.id), { timeout: 30_000, intervals: [50] }).toBeGreaterThan(8);
+    await page.keyboard.press('KeyH');
+    await expect(page.getByTestId('control-line')).toHaveText('由你指挥，原地坚守。按 X 转回自动管理');
     if (k === 0) {
       const button = page.getByTestId('retreat-btn');
       await expect(button).toContainText('撤退回炉心');
@@ -426,10 +430,11 @@ test('retreat: a selected soldier runs back to the core with the 撤退 button a
       await page.keyboard.press('KeyK');
     }
     await expect.poll(() => distance(r.id), { timeout: 30_000 }).toBeLessThan(3);
-    await page.waitForTimeout(1500);
+    // The retreat is a move with an end: at the core the soldier is handed back to automatic control.
+    await expect.poll(() => page.evaluate((id) => (window.scraphold!.session.game.state.entities.get(id) as { control: string }).control, r.id), { timeout: 30_000 }).toBe('auto');
     settled.push(await distance(r.id));
   }
-  console.log(`retreat: soldiers settled ${settled.map((d) => d.toFixed(2)).join(' and ')} tiles from the core center`);
+  console.log(`retreat: soldiers handed back ${settled.map((d) => d.toFixed(2)).join(' and ')} tiles from the core center`);
   test.info().annotations.push({ type: 'retreat', description: settled.map((d) => d.toFixed(2)).join(', ') });
   for (const d of settled) expect(d).toBeLessThan(3);
   await page.keyboard.press('Space');
@@ -698,11 +703,14 @@ test('screens: the signal tower being built and broadcasting, then the signal vi
     return tower!.id;
   });
 
-  await test.step('idle survivors (G) right-click the site and build it; the card and panel show the progress', async () => {
-    await page.keyboard.press('KeyG');
-    const at = await centerOn(page, relay);
-    await page.mouse.click(at.x, at.y, { button: 'right' });
-    const crew = await page.evaluate((id) => [...window.scraphold!.session.game.state.entities.values()].filter((e) => e.kind === 'survivor' && e.task.type === 'work' && e.task.buildingId === id).length, towerId);
+  await test.step('three survivors sent from the site panel (派一名幸存者) build it; the card and panel show the progress', async () => {
+    // The survivors are at work under automatic control: the button takes the nearest of them each time.
+    await selectByClick(page, towerId);
+    for (let i = 0; i < 3; i++) await page.getByTestId('add-worker').click();
+    const crew = await page.evaluate(
+      (id) => [...window.scraphold!.session.game.state.entities.values()].filter((e) => e.kind === 'survivor' && e.task.type === 'work' && e.task.buildingId === id && e.control === 'player').length,
+      towerId,
+    );
     expect(crew, 'survivors assigned to build the tower').toBe(3);
     await expect
       .poll(

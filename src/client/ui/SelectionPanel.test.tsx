@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/preact';
 import { afterEach, describe, expect, it } from 'vitest';
-import { REJECT_REASON_TEXT, createGame, type SignalStage } from '../../sim';
+import { REJECT_REASON_TEXT, applyCommand, createGame, type SignalStage } from '../../sim';
+import { SOLDIERS } from '../../sim/data/combat';
 import { addBuilding } from '../../sim/world/entities';
 import { Session } from '../session';
 import { buildTestWorld } from '../testWorld';
@@ -53,6 +54,54 @@ describe('SelectionPanel', () => {
     expect(button.querySelector('.key')?.textContent).toBe('K');
     expect(button.firstChild?.textContent?.trim()).toBe('撤退回炉心');
     expect(button.querySelector('.tip')?.textContent).toBe('选中的士兵不再交战，直接跑回炉心附近。想撤到别处，用 Ctrl+右键点位置。');
+  });
+
+  it('a selected unit shows who controls it; X and H explain that they hand back and hold', () => {
+    const w = buildTestWorld();
+    const session = new Session(w.game, VIEW);
+    session.select([w.rifle1.id]);
+    const { rerender } = render(<SelectionPanel session={session} />);
+    expect(screen.getByTestId('control-line').textContent).toBe('自动管理');
+    const panel = screen.getByTestId('selection-panel');
+    expect(panel.querySelector('[data-testid="stop-btn"] .tip')?.textContent).toBe('停止；选中的单位转回自动管理');
+    expect(panel.querySelector('[data-testid="hold-btn"] .tip')?.textContent).toBe('原地坚守，一直保持，直到下新命令或按 X');
+    applyCommand(w.game, { type: 'hold', unitIds: [w.rifle1.id] });
+    rerender(<SelectionPanel session={session} />);
+    expect(screen.getByTestId('control-line').textContent).toBe('由你指挥，原地坚守。按 X 转回自动管理');
+  });
+
+  it('a survivor and a group of survivors show who controls them and whom training takes', () => {
+    const w = buildTestWorld();
+    const session = new Session(w.game, VIEW);
+    session.select([w.survivor1.id]);
+    const { rerender } = render(<SelectionPanel session={session} />);
+    expect(screen.getByTestId('control-line').textContent).toBe('自动管理');
+    expect(screen.getByTestId('selection-panel').textContent).toContain('每训练一名士兵，从自动管理的幸存者里调走一人。');
+    applyCommand(w.game, { type: 'assignWork', unitIds: [w.survivor2.id], buildingId: w.greenhouse.id });
+    session.select([w.survivor1.id, w.survivor2.id]);
+    rerender(<SelectionPanel session={session} />);
+    expect(screen.getByTestId('control-line').textContent).toBe('1 个自动管理，1 个由你指挥');
+    expect(screen.getByTestId('selection-panel').textContent).toContain('右键生产建筑：派去工作（工位满了，其余的人保持原来的安排）');
+  });
+
+  it('a barracks explains its rally point and that training takes a survivor under automatic control', () => {
+    const w = buildTestWorld();
+    const session = new Session(w.game, VIEW);
+    session.select([w.barracks.id]);
+    render(<SelectionPanel session={session} />);
+    const panel = screen.getByTestId('selection-panel');
+    expect(panel.textContent).toContain('这个兵营训练的士兵白天在集结点待命。');
+    expect(screen.getByTestId('train-rifleman').querySelector('.tip')?.textContent).toContain(`步枪手（远程）训练 ${SOLDIERS.rifleman.trainSeconds} 秒，从自动管理的幸存者里调走一人`);
+  });
+
+  it('the send-a-worker button takes a survivor under automatic control and keeps them there', () => {
+    const w = buildTestWorld();
+    const session = new Session(w.game, VIEW);
+    session.select([w.greenhouse.id]);
+    render(<SelectionPanel session={session} />);
+    const button = screen.getByTestId('add-worker');
+    expect(button.firstChild?.textContent).toBe('派一名幸存者');
+    expect(button.querySelector('.tip')?.textContent).toBe('从自动管理的幸存者里调一人，固定在这里工作');
   });
 
   it('the signal tower under construction shows its stage and crew buttons, and no help-build button', () => {

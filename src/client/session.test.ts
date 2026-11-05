@@ -193,12 +193,25 @@ describe('Session keyboard input', () => {
     expect(r.session.toasts[0]?.text).toBe('需要科技：军械制造');
   });
 
-  it('G selects the idle survivors on the map', () => {
+  it('G selects the survivors on the map that are idle or waiting for orders', () => {
     const w = buildTestWorld();
     const s = new Session(w.game, VIEW);
     w.survivor2.task = { type: 'repair', buildingId: w.damaged.id };
     s.handleKey({ type: 'selectIdleSurvivors' }, 0);
     expect(s.selection).toEqual([w.survivor1.id]);
+    w.survivor2.task = { type: 'wait' };
+    s.handleKey({ type: 'selectIdleSurvivors' }, 0);
+    expect(s.selection).toEqual([w.survivor1.id, w.survivor2.id]);
+  });
+
+  it('G with nobody idle or waiting says so', () => {
+    const w = buildTestWorld();
+    const s = new Session(w.game, VIEW);
+    w.survivor1.task = { type: 'work', buildingId: w.greenhouse.id };
+    w.survivor2.task = { type: 'repair', buildingId: w.damaged.id };
+    s.handleKey({ type: 'selectIdleSurvivors' }, 0);
+    expect(s.selection).toEqual([]);
+    expect(s.toasts.map((t) => t.text)).toEqual(['没有空闲或等待命令的幸存者']);
   });
 
   it('Escape clears the selection first, then opens the pause menu, which stops time', () => {

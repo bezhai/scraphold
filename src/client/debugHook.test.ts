@@ -31,6 +31,14 @@ describe('installDebugHook', () => {
     expect(renderer.rasterizeSections).toBe(false);
   });
 
+  it('lists who controls each player unit, for e2e checks of the ownership display', () => {
+    install('/?debug');
+    const units = window.scraphold!.entities().filter((e) => e.kind === 'soldier' || e.kind === 'survivor');
+    expect(units.length).toBeGreaterThan(0);
+    expect(units.every((e) => e.control === 'auto')).toBe(true);
+    expect(window.scraphold!.entities('building').every((e) => e.control === null)).toBe(true);
+  });
+
   it('without ?debug installs nothing, so normal play cannot switch it on', () => {
     install('/');
     expect(window.scraphold).toBeUndefined();

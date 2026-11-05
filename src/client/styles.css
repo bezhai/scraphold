@@ -1187,6 +1187,23 @@ button.pop-item:active {
   font-size: 11px;
 }
 
+/* Who controls the selected units; the flag matches the one the map draws over units under player command. */
+.control-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.control-line.player {
+  color: var(--accent-hi);
+}
+
+.control-line.player .glyph {
+  color: var(--accent);
+}
+
 .sel-desc {
   font-size: 12px;
   color: var(--text-2);

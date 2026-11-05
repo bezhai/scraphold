@@ -9,18 +9,20 @@ import { formatPercent, formatSigned } from '../hud/format';
 import {
   selectionPanelModel,
   type BuildingDetails,
+  type ControlLine,
   type GroupEntry,
   type MutantDetails,
   type NestDetails,
   type SoldierDetails,
   type SurvivorDetails,
 } from '../hud/selectionPanel';
+import { ORDER_KEY_TEXT } from '../input/keymap';
 import { buildingIcon, mutantIcon, nestIcon, soldierIcon, survivorIcon } from '../render/icons';
 import type { Session } from '../session';
 import type { SoldierType } from '../../sim/data/combat';
 import { act, hpClass } from './actions';
 import { Cost } from './Cost';
-import { LockGlyph } from './Glyphs';
+import { CommandFlagGlyph, LockGlyph } from './Glyphs';
 
 function HpLine({ hp, maxHp }: { hp: number; maxHp: number }) {
   const f = maxHp > 0 ? hp / maxHp : 0;
@@ -55,14 +57,26 @@ function ActionButton({ session, av, label, hotkey, tip, testId, danger }: { ses
   );
 }
 
+/** Who controls the selection; under player control it carries the flag the map draws over those units. */
+function ControlLineView({ control }: { control: ControlLine }) {
+  return (
+    <div class={`control-line ${control.player ? 'player' : ''}`}>
+      {control.player && <CommandFlagGlyph />}
+      <span data-testid="control-line">{control.text}</span>
+    </div>
+  );
+}
+
 function OrderButtons({ session }: { session: Session }) {
   return (
     <div class="actions">
-      <button class="btn small" onClick={() => session.handleKey({ type: 'stop' }, performance.now())}>
+      <button class="btn small has-tip" data-testid="stop-btn" onClick={() => session.handleKey({ type: 'stop' }, performance.now())}>
         停止 <span class="key">X</span>
+        <span class="tip">{ORDER_KEY_TEXT.stop}</span>
       </button>
-      <button class="btn small" onClick={() => session.handleKey({ type: 'hold' }, performance.now())}>
+      <button class="btn small has-tip" data-testid="hold-btn" onClick={() => session.handleKey({ type: 'hold' }, performance.now())}>
         原地坚守 <span class="key">H</span>
+        <span class="tip">{ORDER_KEY_TEXT.hold}</span>
       </button>
       <button class="btn small has-tip retreat-btn" data-testid="retreat-btn" onClick={() => session.handleKey({ type: 'retreat' }, performance.now())}>
         撤退回炉心 <span class="key">K</span>
@@ -85,6 +99,7 @@ function SoldierView({ session, unit }: { session: Session; unit: SoldierDetails
           <span class="role">{unit.role}</span>
           {unit.hungry && <span class="pill tone-danger">饥饿</span>}
         </div>
+        <ControlLineView control={unit.control} />
         <HpLine hp={unit.hp} maxHp={unit.maxHp} />
         <div class="stats">
           <span>
@@ -136,11 +151,12 @@ function SurvivorView({ unit }: { unit: SurvivorDetails }) {
           <h3>幸存者</h3>
           <span class="role">{unit.task}</span>
         </div>
+        <ControlLineView control={unit.control} />
         <HpLine hp={unit.hp} maxHp={unit.maxHp} />
         <div class="hint">
           右键生产建筑：派去工作　右键受损建筑或工地：维修 / 帮忙建造
           <br />
-          兵营训练士兵时会带走一名空闲幸存者。
+          每训练一名士兵，从自动管理的幸存者里调走一人。
         </div>
       </div>
     </>
@@ -151,13 +167,14 @@ function entryIcon(e: GroupEntry): string {
   return e.key === 'survivor' ? survivorIcon() : soldierIcon(e.key.slice('soldier:'.length) as SoldierType);
 }
 
-function GroupView({ session, entries, total, soldiers }: { session: Session; entries: GroupEntry[]; total: number; soldiers: number }) {
+function GroupView({ session, entries, total, soldiers, control }: { session: Session; entries: GroupEntry[]; total: number; soldiers: number; control: ControlLine }) {
   return (
     <div class="sel-main">
       <div class="sel-title">
         <h3>已选 {total} 个单位</h3>
         <span class="role">点击类型只保留该类</span>
       </div>
+      <ControlLineView control={control} />
       <div class="chips">
         {entries.map((e) => (
           <button key={e.key} class="unit-chip" onClick={() => session.select(e.ids)} title={`平均生命 ${formatPercent(e.health)}`}>
@@ -182,7 +199,7 @@ function GroupView({ session, entries, total, soldiers }: { session: Session; en
         </>
       ) : (
         <div class="hint">
-          右键生产建筑：派去工作（工位满了，其余的人留在原地）　右键受损建筑或工地：维修 / 帮忙建造　右键地面：移动
+          右键生产建筑：派去工作（工位满了，其余的人保持原来的安排）　右键受损建筑或工地：维修 / 帮忙建造　右键地面：移动
         </div>
       )}
     </div>
@@ -244,8 +261,8 @@ function BuildingView({ session, b }: { session: Session; b: BuildingDetails }) 
                 <span key={i} class={`s ${i < b.workers!.count ? 'on' : ''}`} />
               ))}
             </div>
-            <ActionButton session={session} av={b.addWorker} label="派一名空闲幸存者" testId="add-worker" />
-            <ActionButton session={session} av={b.removeWorker} label="撤出一人" />
+            <ActionButton session={session} av={b.addWorker} label="派一名幸存者" tip="从自动管理的幸存者里调一人，固定在这里工作" testId="add-worker" />
+            <ActionButton session={session} av={b.removeWorker} label="撤出一人" testId="remove-worker" />
           </div>
         )}
         {b.training && <TrainingView session={session} training={b.training} />}
@@ -283,7 +300,7 @@ function TrainingView({ session, training }: { session: Session; training: NonNu
               <Cost items={o.cost} />
             </span>
             <span class="tip">
-              <b>{o.name}</b>（{o.role}）训练 {o.seconds} 秒，消耗一名空闲幸存者
+              <b>{o.name}</b>（{o.role}）训练 {o.seconds} 秒，从自动管理的幸存者里调走一人
               <div>{o.description}</div>
               {o.lockedBy && (
                 <span class="reason locked">
@@ -311,6 +328,7 @@ function TrainingView({ session, training }: { session: Session; training: NonNu
         )}
         <span class="hint">{training.hasRally ? '已设集结点 · 右键地面修改' : '右键地面设置集结点'}</span>
       </div>
+      <div class="hint">这个兵营训练的士兵白天在集结点待命。</div>
     </>
   );
 }
@@ -370,7 +388,7 @@ export function SelectionPanel({ session }: { session: Session }) {
     <div class={`panel selection-panel sel-${model.kind}`} data-testid="selection-panel">
       {model.kind === 'soldier' && <SoldierView session={session} unit={model.unit} />}
       {model.kind === 'survivor' && <SurvivorView unit={model.unit} />}
-      {model.kind === 'group' && <GroupView session={session} entries={model.entries} total={model.total} soldiers={model.soldiers} />}
+      {model.kind === 'group' && <GroupView session={session} entries={model.entries} total={model.total} soldiers={model.soldiers} control={model.control} />}
       {model.kind === 'building' && <BuildingView session={session} b={model.building} />}
       {model.kind === 'mutant' && <MutantView m={model.mutant} />}
       {model.kind === 'nest' && <NestView n={model.nest} />}

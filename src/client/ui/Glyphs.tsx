@@ -44,3 +44,13 @@ export function FullscreenGlyph({ exit }: { exit: boolean }) {
     </svg>
   );
 }
+
+/** A pennant on a pole: the mark the map draws over units under the player's command (render/overlays.ts). */
+export function CommandFlagGlyph() {
+  return (
+    <svg class="glyph" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M3 11V1.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+      <path d="M3.6 1.6 10 4.1 3.6 6.6z" fill="currentColor" />
+    </svg>
+  );
+}

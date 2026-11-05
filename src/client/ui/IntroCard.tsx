@@ -15,7 +15,7 @@ export function IntroCard({ session }: { session: Session }) {
         <div class="intro-title">锈原，第 1 天</div>
         <div class="intro-body">
           <p>炉心已经启动，炉心被摧毁就算失败。地图上某个方向有一座旧时代的中继站，找到它可以向长明城求援。</p>
-          <p>先派幸存者去采集食物和废料。第一晚最多只有少量变异体。</p>
+          <p>幸存者和士兵默认自动管理：幸存者会去缺人的地方工作，士兵守在据点附近。你选中单位下命令后由你指挥。第一晚最多只有少量变异体。</p>
         </div>
         <div class="intro-actions">
           <button class="btn primary intro-enter-btn" data-testid="intro-enter" onClick={close} autoFocus>

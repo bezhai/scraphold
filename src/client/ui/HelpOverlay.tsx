@@ -1,14 +1,14 @@
 /**
  * How to play, for players who have not read anything (F1, ?, or the 帮助 button): the goal, the
- * day/night rhythm, where each resource comes from (with the terrain colors of the map), people,
- * defense, and the full key reference. Time stands still while it is open.
+ * day/night rhythm, where each resource comes from (with the terrain colors of the map), unit
+ * control, people, defense, and the full key reference. Time stands still while it is open.
  */
 import { DAY_SECONDS, DUSK_SECONDS, NIGHT_SECONDS } from '../../sim/time';
 import { HIVE_SHIELD } from '../../sim/data/combat';
 import { BUILDINGS } from '../../sim/data/economy';
 import { TERRAIN, type Terrain } from '../../sim/data/map';
 import { formatPercent } from '../hud/format';
-import { BUILD_HOTKEYS } from '../input/keymap';
+import { BUILD_HOTKEYS, ORDER_KEY_TEXT } from '../input/keymap';
 import { COLORS } from '../render/palette';
 import type { Session } from '../session';
 import { ResourceIcon } from './ResourceIcon';
@@ -16,14 +16,14 @@ import { ResourceIcon } from './ResourceIcon';
 const KEYS: [string[], string][] = [
   [['左键'], '选择；拖拽框选；双击选中屏幕内同类'],
   [['Shift'], '加选 / 连续放置建筑'],
-  [['右键'], '士兵：地面攻击移动，敌人集火；幸存者：生产建筑派工，受损建筑维修；兵营：设集结点'],
+  [['右键'], '士兵：地面攻击移动，敌人集火；幸存者：生产建筑派工，受损建筑维修；兵营：设集结点（士兵白天在这里待命）'],
   [['Ctrl', '右键'], '强制移动（不理会敌人）'],
   [['W', 'A', 'S', 'D'], '平移镜头（方向键、鼠标到屏幕边缘也可以），滚轮缩放，点小地图跳转'],
   [['Ctrl', '1-5'], '编队（也可用 Alt+数字或右键编队格）；数字键选队，连按两次镜头跳过去'],
-  [['X'], '停止'],
-  [['H'], '原地坚守'],
+  [['X'], ORDER_KEY_TEXT.stop],
+  [['H'], ORDER_KEY_TEXT.hold],
   [['K'], '撤退回炉心'],
-  [['G'], '选中空闲幸存者'],
+  [['G'], '选中空闲或等待命令的幸存者'],
   [['F'], '跳到最近的警报'],
   [['T'], '科技树'],
   [['P'], '政令'],
@@ -104,7 +104,7 @@ export function HelpOverlay({ session }: { session: Session }) {
                 </span>
               </li>
             </ul>
-            <p>生产建筑要派幸存者进去工作才有产出；放置时会显示这个位置的「产出加成」。炉心有少量保底产出。鼠标停在地面上，左下角会显示这块地适合做什么。</p>
+            <p>生产建筑有幸存者在里面工作才有产出；放置时会显示这个位置的「产出加成」。炉心有少量保底产出。鼠标停在地面上，左下角会显示这块地适合做什么。</p>
             <div class="swatches">
               {TERRAIN_SWATCHES.map(([t, color]) => (
                 <span key={t} class="swatch">
@@ -115,15 +115,19 @@ export function HelpOverlay({ session }: { session: Session }) {
             </div>
             <h4>建造快捷键</h4>
             <p class="build-keys">{BUILD_KEYS.join(' · ')}</p>
+            <h4>单位控制</h4>
+            <p>
+              幸存者和士兵默认<b>自动管理</b>。幸存者按资源缺口去工地、维修和生产建筑工作，锈风暴夜躲进建筑。士兵在据点范围内迎敌，夜里移到预报的来袭方向，血量低时撤回炉心，白天回到兵营集结点；自动管理的士兵不会去打巢穴和母巢。选中单位下命令后<b>由你指挥</b>，命令完成后转回自动管理。派工和原地坚守（H）会一直保持，按 X 转回自动管理。
+            </p>
           </div>
           <div>
             <h4>人口</h4>
             <p>
-              幸存者可以派去工作，也可以训练成士兵：每训练一个士兵消耗一名<b>空闲</b>幸存者。士兵每天要吃食物（黄昏结算，不够就挨饿、战斗力下降）。住房满了就不会再诞生新的幸存者，造棚屋可以增加住房。在建筑里工作的幸存者是安全的，在户外会受到怪物攻击。
+              幸存者可以派去工作，也可以训练成士兵：每训练一名士兵，从自动管理的幸存者里调走一人。士兵每天要吃食物（黄昏结算，不够就挨饿、战斗力下降）。住房满了就不会再诞生新的幸存者，造棚屋可以增加住房。在建筑里工作的幸存者是安全的，在户外会受到怪物攻击。
             </p>
             <h4>防守</h4>
             <p>
-              兵营训练盾卫（前排，挡住疾行者）、步枪手（远程主力）、摩托斥候（侦察）；科技解锁狙击手（打甲壳兽）、掷弹兵（打成群的怪物）和燃料兵种。选中士兵右键地面，它们走过去，路上遇敌会交战；右键敌人集火。空闲的士兵会保护身边受攻击的建筑和幸存者。路障能引导怪物绕路，机枪塔夜里消耗燃料。选中怪物可以看到它怕什么伤害。
+              兵营训练盾卫（前排，挡住疾行者）、步枪手（远程主力）、摩托斥候（侦察）；科技解锁狙击手（打甲壳兽）、掷弹兵（打成群的怪物）和燃料兵种。选中士兵右键地面，它们走过去，路上遇敌会交战，到达后转回自动管理；想让士兵留在那里，再按 H 原地坚守。右键敌人集火。路障能引导怪物绕路，机枪塔夜里消耗燃料。选中怪物可以看到它怕什么伤害。
             </p>
             <h4>操作</h4>
             <div class="keys">

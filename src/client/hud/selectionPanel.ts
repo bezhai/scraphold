@@ -61,6 +61,7 @@ export interface SoldierDetails {
   armorName: string;
   weapon: string;
   order: string;
+  control: ControlLine;
   kills: number;
   veteranKills: number;
   promotion: string | null;
@@ -73,6 +74,14 @@ export interface SurvivorDetails {
   hp: number;
   maxHp: number;
   task: string;
+  control: ControlLine;
+}
+
+/** Who controls the selected units, in the words of docs/narrative.md「单位控制」. */
+export interface ControlLine {
+  text: string;
+  /** Some of them are under player control (the map flags these). */
+  player: boolean;
 }
 
 export interface GroupEntry {
@@ -174,12 +183,34 @@ export type SelectionPanelModel =
   | { kind: 'none' }
   | { kind: 'soldier'; unit: SoldierDetails }
   | { kind: 'survivor'; unit: SurvivorDetails }
-  | { kind: 'group'; entries: GroupEntry[]; total: number; soldiers: number; survivors: number }
+  | { kind: 'group'; entries: GroupEntry[]; total: number; soldiers: number; survivors: number; control: ControlLine }
   | { kind: 'building'; building: BuildingDetails }
   | { kind: 'mutant'; mutant: MutantDetails }
   | { kind: 'nest'; nest: NestDetails };
 
 const ORDER_NAMES = { idle: '待命', move: '移动', attackMove: '攻击移动', attackTarget: '集火', hold: '原地坚守' } as const;
+
+/**
+ * The owner is the simulation's `control`; the player's order only picks the wording: holding,
+ * assigned work and waiting after being pulled out of a building have no end, every other order
+ * hands the unit back when it ends.
+ */
+function controlText(u: SoldierView | SurvivorView): string {
+  if (u.control === 'auto') return '自动管理';
+  if (u.kind === 'soldier') return u.order.type === 'hold' ? '由你指挥，原地坚守。按 X 转回自动管理' : '由你指挥，命令完成后转回自动管理';
+  if (u.task.type === 'work') return '由你指挥，固定在这里工作。按 X 转回自动管理';
+  if (u.task.type === 'wait') return '由你指挥，等待命令。按 X 转回自动管理';
+  return '由你指挥，命令完成后转回自动管理';
+}
+
+/** One unit's line, or for a multi-selection the line all units share, otherwise how many are on each side. */
+function controlLine(units: readonly (SoldierView | SurvivorView)[]): ControlLine {
+  const auto = units.filter((u) => u.control === 'auto').length;
+  const player = auto < units.length;
+  const texts = new Set(units.map(controlText));
+  if (texts.size === 1) return { text: [...texts][0] as string, player };
+  return { text: auto === 0 ? '由你指挥。按 X 转回自动管理' : `${auto} 个自动管理，${units.length - auto} 个由你指挥`, player };
+}
 
 function trim(n: number): string {
   return String(Math.round(n * 10) / 10);
@@ -200,6 +231,7 @@ function soldierDetails(game: Game, s: SoldierView): SoldierDetails {
     armorName: ARMOR_TYPE_NAMES[s.armor],
     weapon: `${DAMAGE_TYPE_NAMES[w.damageType]}伤害 · 射程 ${rangeText}`,
     order: ORDER_NAMES[s.order.type],
+    control: controlLine([s]),
     kills: s.veterancy.kills,
     veteranKills: veteranThreshold(game, s),
     promotion: s.veterancy.promotion ? PROMOTIONS[s.veterancy.promotion].name : null,
@@ -222,9 +254,10 @@ function buildingName(view: GameView, id: EntityId): string {
 
 function survivorDetails(view: GameView, s: SurvivorView): SurvivorDetails {
   let task = '空闲';
-  if (s.task.type === 'work') task = s.insideId !== 0 ? `在${buildingName(view, s.task.buildingId)}工作` : `前往${buildingName(view, s.task.buildingId)}工作`;
+  if (s.task.type === 'wait') task = '等待命令';
+  else if (s.task.type === 'work') task = s.insideId !== 0 ? `在${buildingName(view, s.task.buildingId)}工作` : `前往${buildingName(view, s.task.buildingId)}工作`;
   else if (s.task.type === 'repair') task = `维修${buildingName(view, s.task.buildingId)}`;
-  return { id: s.id, hp: Math.ceil(s.hp), maxHp: Math.ceil(s.maxHp), task };
+  return { id: s.id, hp: Math.ceil(s.hp), maxHp: Math.ceil(s.maxHp), task, control: controlLine([s]) };
 }
 
 function groupEntries(units: readonly (SoldierView | SurvivorView)[]): GroupEntry[] {
@@ -396,7 +429,7 @@ export function selectionPanelModel(game: Game, selection: readonly EntityId[]):
       const units = entities.filter((e): e is SoldierView | SurvivorView => e.kind === 'soldier' || e.kind === 'survivor');
       if (units.length > 1) {
         const soldiers = units.filter((u) => u.kind === 'soldier').length;
-        return { kind: 'group', entries: groupEntries(units), total: units.length, soldiers, survivors: units.length - soldiers };
+        return { kind: 'group', entries: groupEntries(units), total: units.length, soldiers, survivors: units.length - soldiers, control: controlLine(units) };
       }
       return first.kind === 'soldier' ? { kind: 'soldier', unit: soldierDetails(game, first) } : { kind: 'survivor', unit: survivorDetails(view, first as SurvivorView) };
     }

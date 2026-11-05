@@ -371,10 +371,11 @@ export class Session {
         this.policiesOpen = false;
         break;
       case 'selectIdleSurvivors': {
-        const idle: EntityId[] = [];
-        for (const e of this.game.state.entities.values()) if (e.kind === 'survivor' && isOnMap(e) && e.task.type === 'idle') idle.push(e.id);
-        if (idle.length === 0) this.toast('没有空闲的幸存者', now);
-        else this.selection = idle;
+        // Survivors pulled out of a building wait for the player's next order: the free hands, with the idle ones.
+        const free: EntityId[] = [];
+        for (const e of this.game.state.entities.values()) if (e.kind === 'survivor' && isOnMap(e) && (e.task.type === 'idle' || e.task.type === 'wait')) free.push(e.id);
+        if (free.length === 0) this.toast('没有空闲或等待命令的幸存者', now);
+        else this.selection = free;
         break;
       }
       case 'speed':

@@ -8,7 +8,7 @@ import type { GameView } from '../../sim';
 import { SOLDIER_TYPES } from '../../sim/data/combat';
 import { BUILDINGS, BUILDING_TYPES, TECHS } from '../../sim/data/economy';
 
-export type GuideStepId = 'produce' | 'staff' | 'barracks' | 'train' | 'forecast' | 'survive' | 'calendar' | 'incident' | 'relay';
+export type GuideStepId = 'produce' | 'barracks' | 'train' | 'forecast' | 'survive' | 'calendar' | 'incident' | 'relay';
 
 export interface GuideStep {
   id: GuideStepId;
@@ -39,11 +39,6 @@ function placedProducer(view: GameView): boolean {
   return false;
 }
 
-function hasSurvivorAtWork(view: GameView): boolean {
-  for (const e of view.entities.values()) if (e.kind === 'survivor' && e.hp > 0 && e.task.type === 'work') return true;
-  return false;
-}
-
 function hasBarracks(view: GameView): boolean {
   for (const e of view.entities.values()) if (e.kind === 'building' && e.type === 'barracks') return true;
   return false;
@@ -61,11 +56,10 @@ export function firstDayGuide(view: GameView, progress: GuideProgress): GuideMod
   const nightFell = day > 1 || phase === 'night';
   const steps: GuideStep[] = [
     { id: 'produce', text: '造一座生产建筑：温室放沃土（绿色地块），拆解站挨着残骸。放置时看「产出加成」', done: placedProducer(view) },
-    { id: 'staff', text: '派幸存者进去工作：选中幸存者，右键生产建筑。没人工作就没有产出', done: hasSurvivorAtWork(view) },
     { id: 'barracks', text: '造一座兵营（B）', done: hasBarracks(view) },
-    { id: 'train', text: '选中兵营训练士兵。每个士兵要消耗一名空闲幸存者', done: startedTraining(view) },
+    { id: 'train', text: '选中兵营训练士兵。每训练一名士兵，从自动管理的幸存者里调走一人', done: startedTraining(view) },
     { id: 'calendar', text: '顶栏的日历显示今晚和之后 3 晚是什么夜，悬停看每种夜的说明。', done: progress.calendarSeen },
-    { id: 'forecast', text: '黄昏看右上角的侦察报告，有夜袭时红色箭头会指出怪物从哪边来，把士兵摆过去（选中士兵，右键地面；Ctrl+右键强制移动）', done: nightFell },
+    { id: 'forecast', text: '黄昏看右上角的侦察报告，有夜袭时红色箭头会指出怪物从哪边来，自动管理的士兵会移过去。想自己布置：选中士兵，右键地面，再按 H 原地坚守', done: nightFell },
     { id: 'survive', text: '守住第 1 夜', done: day > 1 },
     { id: 'incident', text: '事件卡弹出时游戏会停住。天黑前没处理，会按最后一个选项结算。', done: view.incidents.history.length > 0 || (day >= 3 && view.incidents.pending === null) },
     { id: 'relay', text: `派斥候探索迷雾，找到中继站；研究"${TECHS.oldFrequency.name}"以后就能在那里修信号塔。`, done: view.signal.discovered || view.economy.tech.researched.includes('oldFrequency') },

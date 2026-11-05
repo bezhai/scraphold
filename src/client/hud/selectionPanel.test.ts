@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DAMAGE_MULTIPLIER, DAMAGE_TYPES, DAMAGE_TYPE_NAMES, HIVE_SHIELD, PROMOTIONS, SOLDIERS } from '../../sim/data/combat';
 import { BUILDINGS } from '../../sim/data/economy';
-import { SIGNAL_STAGE_NAMES, buildingYieldPerDay, createGame, onsiteWorkerCount, perDayToPerMinute, veteranThreshold } from '../../sim';
-import { addBuilding, removeEntity, spawnSurvivor } from '../../sim/world/entities';
+import { SIGNAL_STAGE_NAMES, applyCommand, buildingYieldPerDay, createGame, onsiteWorkerCount, perDayToPerMinute, veteranThreshold, type Game } from '../../sim';
+import { addBuilding, enterBuilding, removeEntity, spawnSurvivor } from '../../sim/world/entities';
 import { buildTestWorld, revealAll } from '../testWorld';
 import { expectMirrors } from './expectMirrors';
 import { selectionPanelModel } from './selectionPanel';
@@ -64,6 +64,71 @@ describe('selectionPanelModel: units', () => {
     expect(selectionPanelModel(w.game, [w.survivor1.id])).toMatchObject({ unit: { task: '前往温室工作' } });
     w.survivor1.task = { type: 'repair', buildingId: w.damaged.id };
     expect(selectionPanelModel(w.game, [w.survivor1.id])).toMatchObject({ unit: { task: '维修拆解站' } });
+    w.survivor1.task = { type: 'wait' };
+    expect(selectionPanelModel(w.game, [w.survivor1.id])).toMatchObject({ unit: { task: '等待命令' } });
+  });
+});
+
+/** The ownership line of the panel for these units (docs/narrative.md「单位控制」). */
+function controlLine(game: Game, ids: number[]): string | null {
+  const m = selectionPanelModel(game, ids);
+  if (m.kind === 'soldier' || m.kind === 'survivor') return m.unit.control.text;
+  return m.kind === 'group' ? m.control.text : null;
+}
+
+describe('selectionPanelModel: who controls the selected units', () => {
+  it('units start under automatic control', () => {
+    const w = buildTestWorld();
+    expect(controlLine(w.game, [w.rifle1.id])).toBe('自动管理');
+    expect(controlLine(w.game, [w.survivor1.id])).toBe('自动管理');
+    expect(selectionPanelModel(w.game, [w.rifle1.id])).toMatchObject({ unit: { control: { player: false } } });
+  });
+
+  it('flags a selection with any unit under player control', () => {
+    const w = buildTestWorld();
+    applyCommand(w.game, { type: 'hold', unitIds: [w.rifle1.id] });
+    expect(selectionPanelModel(w.game, [w.rifle1.id])).toMatchObject({ unit: { control: { player: true } } });
+    expect(selectionPanelModel(w.game, [w.rifle1.id, w.rifle2.id])).toMatchObject({ control: { player: true } });
+    expect(selectionPanelModel(w.game, [w.rifle2.id, w.guard.id])).toMatchObject({ control: { player: false } });
+  });
+
+  it('a soldier given an order with an end is under player control until it ends; X hands it back', () => {
+    const w = buildTestWorld();
+    applyCommand(w.game, { type: 'move', unitIds: [w.rifle1.id], x: 10.5, y: 10.5 });
+    expect(controlLine(w.game, [w.rifle1.id])).toBe('由你指挥，命令完成后转回自动管理');
+    applyCommand(w.game, { type: 'stop', unitIds: [w.rifle1.id] });
+    expect(controlLine(w.game, [w.rifle1.id])).toBe('自动管理');
+  });
+
+  it('a holding soldier keeps holding until X', () => {
+    const w = buildTestWorld();
+    applyCommand(w.game, { type: 'hold', unitIds: [w.rifle1.id] });
+    expect(controlLine(w.game, [w.rifle1.id])).toBe('由你指挥，原地坚守。按 X 转回自动管理');
+  });
+
+  it('a survivor the player sent to work stays there; one sent to repair goes back when done', () => {
+    const w = buildTestWorld();
+    applyCommand(w.game, { type: 'assignWork', unitIds: [w.survivor1.id], buildingId: w.greenhouse.id });
+    expect(controlLine(w.game, [w.survivor1.id])).toBe('由你指挥，固定在这里工作。按 X 转回自动管理');
+    applyCommand(w.game, { type: 'repair', unitIds: [w.survivor2.id], buildingId: w.damaged.id });
+    expect(controlLine(w.game, [w.survivor2.id])).toBe('由你指挥，命令完成后转回自动管理');
+  });
+
+  it('a survivor pulled out of a building waits for orders', () => {
+    const w = buildTestWorld();
+    enterBuilding(w.game, w.survivor1, w.greenhouse);
+    applyCommand(w.game, { type: 'unassignWork', buildingId: w.greenhouse.id, count: 1 });
+    expect(controlLine(w.game, [w.survivor1.id])).toBe('由你指挥，等待命令。按 X 转回自动管理');
+  });
+
+  it('a multi-selection counts both sides when they differ, and shows the common line when they agree', () => {
+    const w = buildTestWorld();
+    expect(controlLine(w.game, [w.rifle1.id, w.rifle2.id, w.survivor1.id])).toBe('自动管理');
+    applyCommand(w.game, { type: 'hold', unitIds: [w.rifle1.id, w.rifle2.id] });
+    expect(controlLine(w.game, [w.rifle1.id, w.rifle2.id])).toBe('由你指挥，原地坚守。按 X 转回自动管理');
+    expect(controlLine(w.game, [w.rifle1.id, w.rifle2.id, w.guard.id, w.survivor1.id])).toBe('2 个自动管理，2 个由你指挥');
+    applyCommand(w.game, { type: 'move', unitIds: [w.guard.id], x: 10.5, y: 10.5 });
+    expect(controlLine(w.game, [w.rifle1.id, w.guard.id])).toBe('由你指挥。按 X 转回自动管理');
   });
 });
 

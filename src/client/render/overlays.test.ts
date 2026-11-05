@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { edgeAnchor, type Camera, type ScreenRect } from '../camera';
-import { markerArea } from './overlays';
+import { commandFlags, markerArea, unitBarRect, type UnitMark } from './overlays';
 
 // The HUD at 1440x900 as it stands in e2e/screenshots/v2-14-night-rustStorm.png: top bar, tonight's
 // forecast, the pause banner, the event log, the minimap, the opening guide and the build dock.
@@ -49,5 +49,40 @@ describe('markerArea', () => {
   it('a target on screen in the free area keeps its marker on the spot', () => {
     const p = world(735, 640);
     expect(edgeAnchor(cam, p.x, p.y, markerArea(cam, PANELS))).toMatchObject({ onScreen: true });
+  });
+});
+
+describe('commandFlags', () => {
+  const DEFAULT_PX = 1 / 44;
+  const MIN_PX = 1 / 10.9;
+  const rifleman = (x: number, commanded: boolean): UnitMark => ({ x, y: 5, d: 0.62, player: true, commanded });
+
+  it('flags only the units under player command', () => {
+    const flags = commandFlags([rifleman(1, false), rifleman(2, true), { x: 3, y: 5, d: 0.7, player: false, commanded: false }], DEFAULT_PX);
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.x).toBeLessThan(2);
+  });
+
+  it('stands at the upper left of the unit, clear of its health bar and of the veteran star at the upper right', () => {
+    for (const px of [DEFAULT_PX, MIN_PX]) {
+      const m = rifleman(2, true);
+      const f = commandFlags([m], px)[0]!;
+      const bar = unitBarRect(m, px);
+      const pennant = { x0: Math.min(f.x, f.tipX), x1: Math.max(f.x, f.tipX), y0: f.topY, y1: f.lowY };
+      const pole = { x0: f.x, x1: f.x, y0: f.topY, y1: f.baseY };
+      for (const part of [pennant, pole]) {
+        const overlaps = part.x0 < bar.x + bar.w + px && part.x1 > bar.x - px && part.y0 < bar.y + bar.h + px && part.y1 > bar.y - px;
+        expect(overlaps, `zoom ${Math.round(1 / px)}`).toBe(false);
+      }
+      expect(pennant.x1).toBeLessThan(m.x + m.d * 0.42 - 0.13);
+    }
+  });
+
+  it('keeps a readable size in screen pixels when zoomed all the way out', () => {
+    const atDefault = commandFlags([rifleman(2, true)], DEFAULT_PX)[0]!;
+    const atMin = commandFlags([rifleman(2, true)], MIN_PX)[0]!;
+    expect((atDefault.baseY - atDefault.topY) / DEFAULT_PX).toBeGreaterThanOrEqual(10);
+    expect((atMin.baseY - atMin.topY) / MIN_PX).toBeGreaterThanOrEqual(7);
+    expect(Math.abs(atMin.tipX - atMin.x) / MIN_PX).toBeGreaterThanOrEqual(4);
   });
 });
