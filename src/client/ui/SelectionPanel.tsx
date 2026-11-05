@@ -357,7 +357,7 @@ function NestView({ n }: { n: NestDetails }) {
           <span class="role">{n.isHive ? '摧毁即胜利' : '每夜成长，派出额外怪物'}</span>
         </div>
         <HpLine hp={n.hp} maxHp={n.maxHp} />
-        <div class="sel-desc">{n.isHive ? '母巢守卫强大。摧毁它可以提前获胜，得分更高。' : '摧毁巢穴可以获得燃料、科研，有时还有幸存者。选中士兵后右键巢穴即可集火。'}</div>
+        <div class="sel-desc">{n.description}</div>
       </div>
     </>
   );

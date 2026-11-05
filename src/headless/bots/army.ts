@@ -5,10 +5,13 @@
  * Defense: the garrison waits at a rally point toward the forecast directions and attack-moves at
  * the visible mutant nearest to the core whenever one is inside the strategy's engage radius.
  * Raids: by day a strike force (everything above the home guard) attack-moves to a discovered
- * ordinary nest when it can defeat the guards and return before night. A hive siege evaluates
- * guard survivability and structure firepower separately, keeps a larger home garrison, and persists across nights.
+ * ordinary nest when it can defeat the guards and return before night. Ordinary nests come before
+ * the hive: each one standing shields the hive (sim hiveShield). A hive siege evaluates guard
+ * survivability and structure firepower separately, the firepower against the hive behind the
+ * shield the ordinary nests left give it (the count the objectives card shows), keeps a larger
+ * home garrison, and persists across nights.
  */
-import { nightType, type Game, type Mutant, type Nest, type Point, type Soldier } from '../../sim';
+import { hiveDamageReduction, nightType, ordinaryNestsLeft, type Game, type Mutant, type Nest, type Point, type Soldier } from '../../sim';
 import { HIVE, NEST, SOLDIERS, type SoldierType } from '../../sim/data/combat';
 import { TICKS_PER_SECOND, DAY_SECONDS, NIGHT_SECONDS } from '../../sim/time';
 import { rallyPoint } from './intel';
@@ -46,13 +49,26 @@ function hiveGuardPower(nest: Nest): number {
   return guardStrength(nest) * 0.4;
 }
 
-function hiveDurabilityPower(nest: Nest): number {
-  return nest.hp / (STRUCTURE_DPS_PER_POWER * 2.5 * (DAY_SECONDS + NIGHT_SECONDS));
+/** Share of each hit that reaches the hive with the ordinary nests now standing (public on the objectives card). */
+export function hiveDamageTaken(game: Game): number {
+  return 1 - hiveDamageReduction(ordinaryNestsLeft(game.state));
 }
 
-/** Visible guards and remaining HP; budget the hive assault for two and a half day/night cycles. */
-export function hiveAssaultPower(nest: Nest): number {
-  return Math.max(hiveGuardPower(nest), hiveDurabilityPower(nest));
+/**
+ * Structure fire a hive assault is planned around: one daytime. With its nests gone the hive is
+ * small enough to fall within a day, and a siege that runs past dawn meets a full set of fresh
+ * guards and a level-up, so the bot waits until its strike force can finish the job by daylight.
+ */
+const HIVE_ASSAULT_SECONDS = DAY_SECONDS;
+
+/** `damageTaken`: share of each hit the hive shield lets through (1 with no ordinary nest left). */
+function hiveDurabilityPower(nest: Nest, damageTaken: number): number {
+  return nest.hp / (damageTaken * STRUCTURE_DPS_PER_POWER * HIVE_ASSAULT_SECONDS);
+}
+
+/** Visible guards and remaining HP behind the shield, the HP to be brought down within one daytime. */
+export function hiveAssaultPower(nest: Nest, damageTaken: number): number {
+  return Math.max(hiveGuardPower(nest), hiveDurabilityPower(nest, damageTaken));
 }
 
 export interface RaidPower { combat: number; structure: number }
@@ -186,20 +202,21 @@ function endRaid(ctx: Context): void {
   if (raiders.length > 0) ctx.turn.issue({ type: 'move', unitIds: raiders.map((s) => s.id), x: ctx.core.x, y: ctx.core.y + 3 });
 }
 
-function canOvercome(nest: Nest, plan: NonNullable<Strategy['raids']>, power: RaidPower): boolean {
+function canOvercome(ctx: Context, nest: Nest, plan: NonNullable<Strategy['raids']>, power: RaidPower): boolean {
   if (!nest.isHive) return power.combat >= plan.powerRatio * guardStrength(nest);
   return plan.hive !== null
     && power.combat >= Math.max(plan.hive.minPower, plan.powerRatio * hiveGuardPower(nest))
-    && power.structure >= plan.powerRatio * hiveDurabilityPower(nest);
+    && power.structure >= plan.powerRatio * hiveDurabilityPower(nest, hiveDamageTaken(ctx.game));
 }
 
+/** Nests the force can take, ordinary nests first (each one shields the hive), weakest and nearest first. */
 export function raidTargets(ctx: Context, plan: NonNullable<Strategy['raids']>, power: RaidPower): Nest[] {
   return ctx.snap.discoveredNests
     .filter((n) => {
-      if (!n.isHive) return canOvercome(n, plan, power);
-      return plan.hive !== null && ctx.day >= plan.hive.fromDay && canOvercome(n, plan, power);
+      if (!n.isHive) return canOvercome(ctx, n, plan, power);
+      return plan.hive !== null && ctx.day >= plan.hive.fromDay && canOvercome(ctx, n, plan, power);
     })
-    .sort((a, b) => Number(b.isHive) - Number(a.isHive) || a.hp - b.hp || distance(a, ctx.core) - distance(b, ctx.core));
+    .sort((a, b) => Number(a.isHive) - Number(b.isHive) || a.hp - b.hp || distance(a, ctx.core) - distance(b, ctx.core));
 }
 
 /** Starts, steers and ends daytime raids on discovered nests. */
@@ -231,7 +248,7 @@ export function raid(ctx: Context, strategy: Strategy): void {
   for (const n of raidTargets(ctx, plan, raidPowerOf(available))) {
     const strike = n.isHive ? garrison.slice(0, Math.max(0, garrison.length - plan.hive!.homeGuard)) : available;
     const power = raidPowerOf(strike);
-    if (strike.length === 0 || !canOvercome(n, plan, power)) continue;
+    if (strike.length === 0 || !canOvercome(ctx, n, plan, power)) continue;
     const from = centroid(strike);
     const eta = distance(from, n) / slowest(strike);
     const killTime = n.hp / (power.combat * STRUCTURE_DPS_PER_POWER);

@@ -43,6 +43,7 @@ export { buildingHousing, populationCount } from './economy/population';
 // Combat read-outs for the HUD (effective weapons for range previews, veterancy threshold).
 export { mutantWeapon, soldierWeapon, towerWeapon, towerWeaponOfType, type WeaponProfile } from './combat/weapons';
 export { veteranThreshold } from './combat/damage';
+export { hiveDamageReduction, ordinaryNestsLeft, type NestCensus } from './combat/hiveShield';
 export { compassDirection } from './combat/night';
 
 /** Hash of the canonical state: equal for equal seed + commands. */

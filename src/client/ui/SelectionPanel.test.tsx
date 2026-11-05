@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/preact';
 import { afterEach, describe, expect, it } from 'vitest';
-import { REJECT_REASON_TEXT, type SignalStage } from '../../sim';
+import { REJECT_REASON_TEXT, createGame, type SignalStage } from '../../sim';
 import { addBuilding } from '../../sim/world/entities';
 import { Session } from '../session';
 import { buildTestWorld } from '../testWorld';
@@ -22,6 +22,18 @@ function towerPanel(stage: SignalStage) {
 }
 
 describe('SelectionPanel', () => {
+  it('a selected hive shows the shield rule instead of the old guard and score line', () => {
+    const game = createGame({ seed: 'sel-hive', origin: 'militia', difficulty: 'normal' });
+    const hive = [...game.state.entities.values()].find((e) => e.kind === 'nest' && e.isHive)!;
+    if (hive.kind === 'nest') hive.discovered = true;
+    const session = new Session(game, VIEW);
+    session.select([hive.id]);
+    render(<SelectionPanel session={session} />);
+    const desc = screen.getByTestId('selection-panel').querySelector('.sel-desc')?.textContent;
+    expect(desc).toMatch(/^地图上每剩一个普通巢穴，母巢受到的伤害降低 \d+%，最多降低 \d+%。现在还剩 8 个，减伤 \d+%。$/);
+    expect(screen.getByTestId('selection-panel').textContent).not.toContain('得分更高');
+  });
+
   it('is not there while nothing is selected, and shows the selection once something is', () => {
     const w = buildTestWorld();
     const session = new Session(w.game, VIEW);

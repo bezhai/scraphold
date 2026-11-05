@@ -4,7 +4,8 @@
  * first, for their fuel, research and survivors, and so that they stop sending groups at night.
  * Grenadiers answer armored and ranged mutants (explosives also break nests); the military line
  * leads to armed pickups (fast, armored, made for clearing nests); with enough power late in the
- * game the strike force goes for the hive and an early victory.
+ * game the strike force goes for the hive and an early victory. Ordinary nests go first because
+ * each one standing shields the hive, so the expedition army is sized for the unshielded hive.
  */
 import { guardStrength, hiveAssaultPower } from './army';
 import { preparationThreat, composeArmy, knowsOil, nearCore, needsHousing, threatShares } from './common';
@@ -33,7 +34,7 @@ export function nestRaider(): Strategy {
     army(ctx) {
       const s = threatShares(ctx.est.mix);
       const hive = ctx.snap.discoveredNests.find(n => n.isHive);
-      const expedition = hive && ctx.researched('expeditionPack') ? Math.max(guardStrength(hive), hiveAssaultPower(hive)) * 1.4 : 0;
+      const expedition = hive && ctx.researched('expeditionPack') ? Math.max(guardStrength(hive), hiveAssaultPower(hive, 1)) * 1.4 : 0;
       const power = Math.max(3 + preparationThreat(ctx) * 0.35, expedition);
       const fighters = composeArmy(ctx, power, {
         rifleman: 0.5,

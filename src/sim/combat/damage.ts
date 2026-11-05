@@ -1,8 +1,9 @@
 /**
  * One hit and everything that follows from it: the damage type x armor multiplier, building
- * damage-taken modifiers (per building type, and at night), hit ticks and underAttack alerts,
- * and on a kill the bookkeeping: kill and loss stats, veterancy, nest and hive destruction.
- * Removal of dead entities stays with world/cleanup.ts at the end of the tick. Owner: Task 3.
+ * damage-taken modifiers (per building type, and at night), the hive shield (hiveShield.ts), hit
+ * ticks and underAttack alerts, and on a kill the bookkeeping: kill and loss stats, veterancy,
+ * nest and hive destruction. Removal of dead entities stays with world/cleanup.ts at the end of
+ * the tick. Owner: Task 3.
  */
 import { signalDamageFactor } from '../signal/signal';
 import { ALERT_THROTTLE_SECONDS, DAMAGE_MULTIPLIER, SOLDIERS, type ArmorType, type DamageType } from '../data/combat';
@@ -10,6 +11,7 @@ import { emit } from '../events';
 import type { Game } from '../game';
 import type { Building, Entity, Mutant, Soldier } from '../state';
 import { secondsToTicks } from '../time';
+import { hiveDamageReduction, ordinaryNestsLeft } from './hiveShield';
 import { destroyNest } from './nests';
 
 /** Anything with a weapon: soldiers, mutants, towers. */
@@ -26,13 +28,15 @@ function nightIncidentDamageFactor(game: Game): number {
   return game.state.clock.phase === 'night' ? game.modifiers.factor.nightBuildingDamage : 1;
 }
 
-/** Hp that `raw` weapon damage of `type` removes from `target`. */
+/** Hp that `raw` weapon damage of `type` removes from `target` (the hive shield included). */
 export function hitDamage(game: Game, target: Entity, raw: number, type: DamageType): number {
   let dmg = raw * damageMultiplier(type, target.armor);
   if (target.kind === 'building') {
     let taken = game.modifiers.building[target.type].damageTakenPct;
     if (game.state.clock.phase === 'night') taken += game.modifiers.global.nightBuildingDamageTakenPct;
     dmg *= Math.max(0, 1 + taken) * signalDamageFactor(game, target) * nightIncidentDamageFactor(game);
+  } else if (target.kind === 'nest' && target.isHive) {
+    dmg *= 1 - hiveDamageReduction(ordinaryNestsLeft(game.state));
   }
   return dmg;
 }

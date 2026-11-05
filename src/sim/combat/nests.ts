@@ -15,6 +15,7 @@ import type { ResourceAmounts } from '../data/economy';
 import { emit } from '../events';
 import type { Game } from '../game';
 import { distanceToRect } from '../map/grid';
+import { ordinaryNestsLeft } from './hiveShield';
 import { pickWeighted } from '../rng';
 import type { Building, Mutant, Nest } from '../state';
 import { freeTileAround, openTilesAround, removeEntity, spawnMutant, spawnSurvivor } from '../world/entities';
@@ -52,7 +53,7 @@ export function destroyNest(game: Game, nest: Nest): void {
     state.economy.resources[res] += amount;
     state.stats.resourcesGathered[res] += amount;
   }
-  emit(game, { type: 'nestDestroyed', nestId: nest.id, isHive: nest.isHive, reward: resources, survivors });
+  emit(game, { type: 'nestDestroyed', nestId: nest.id, isHive: nest.isHive, nestsLeft: ordinaryNestsLeft(state), reward: resources, survivors });
   const core = state.entities.get(state.coreId) as Building;
   for (let k = 0; k < survivors; k++) {
     const tile = freeTileAround(game, core);

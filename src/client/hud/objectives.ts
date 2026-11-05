@@ -1,12 +1,14 @@
 /**
  * The victory objectives card (O): one line of status per route — hold out to the last dawn,
  * destroy the hive, or call 长明城 with the signal tower. Progress comes from simulation state and
- * read-out functions (onsiteWorkerCount, workerSlots); incident goals are not listed here, they
- * live on the map and in the event log.
+ * read-out functions (onsiteWorkerCount, workerSlots, ordinaryNestsLeft, hiveDamageReduction);
+ * incident goals are not listed here, they live on the map and in the event log.
  */
-import { RELAY, TOTAL_NIGHTS, onsiteWorkerCount, workerSlots, type Game, type GameView } from '../../sim';
+import { RELAY, TOTAL_NIGHTS, hiveDamageReduction, onsiteWorkerCount, ordinaryNestsLeft, workerSlots, type Game, type GameView } from '../../sim';
+import { HIVE_SHIELD } from '../../sim/data/combat';
 import { TECHS } from '../../sim/data/economy';
 import { isNestKnown, type NestView } from '../view';
+import { formatPercent } from './format';
 
 export type ObjectiveRouteId = 'survive' | 'hive' | 'signal';
 
@@ -23,11 +25,15 @@ export function findHive(view: GameView): NestView | null {
   return null;
 }
 
+/** Hive health plus the shield the ordinary nests left give it (sim/combat/hiveShield.ts). */
 function hiveStatus(view: GameView): string {
   if (view.stats.hiveDestroyed) return '母巢已经摧毁。';
   const hive = findHive(view);
-  if (!hive || !isNestKnown(view, hive)) return '母巢还没有找到。';
-  return `母巢生命 ${Math.ceil((hive.hp / hive.maxHp) * 100)}%。`;
+  if (!hive || !isNestKnown(view, hive)) return `母巢还没有找到。地图上每剩一个巢穴，母巢受到的伤害降低 ${formatPercent(HIVE_SHIELD.reductionPerNest)}。`;
+  const health = `母巢生命 ${Math.ceil((hive.hp / hive.maxHp) * 100)}%。`;
+  const nests = ordinaryNestsLeft(view);
+  if (nests === 0) return `${health}巢穴已全部摧毁，母巢不再减伤。`;
+  return `${health}还剩 ${nests} 个巢穴，母巢受到的伤害降低 ${formatPercent(hiveDamageReduction(nests))}。`;
 }
 
 function signalStatus(game: Game): string {

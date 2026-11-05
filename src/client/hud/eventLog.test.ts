@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { clockAt, INCIDENT_TARGETS, RADIO_BROADCASTS } from '../../sim';
+import { HIVE_SHIELD } from '../../sim/data/combat';
 import { tileCenter } from '../../sim/map/grid';
 import { CYCLE_TICKS } from '../../sim/time';
 import { buildTestWorld } from '../testWorld';
 import { FEED_FADE_TICKS, FEED_HOLD_TICKS, FEED_LINES, HISTORY_LINES, alertFromEvent, broadcastEntry, logFeed, logLineForEvent, withBroadcast } from './eventLog';
+
+const pct = (share: number) => `${Math.round(share * 100)}%`;
 
 describe('logLineForEvent', () => {
   it('announces phases', () => {
@@ -51,10 +54,29 @@ describe('logLineForEvent', () => {
     expect(logLineForEvent(game.state, { type: 'inspiration', tech: 'refinery' })?.text).toBe('灵感：炼油工艺 研究进度 +50%');
     expect(logLineForEvent(game.state, { type: 'hunger', hungry: true })).toMatchObject({ tone: 'danger' });
     expect(logLineForEvent(game.state, { type: 'hunger', hungry: false })).toMatchObject({ tone: 'good' });
-    expect(logLineForEvent(game.state, { type: 'nestDestroyed', nestId: 5, isHive: false, reward: { fuel: 30, research: 30 }, survivors: 1 })?.text).toBe(
-      '摧毁巢穴：获得 燃料 30、科研 30，1 名幸存者加入',
-    );
+    expect(logLineForEvent(game.state, { type: 'nestDestroyed', nestId: 5, isHive: false, nestsLeft: 2, reward: { fuel: 30, research: 30 }, survivors: 1 })).toMatchObject({
+      text: `摧毁了一个巢穴，还剩 2 个，母巢减伤 ${pct(2 * HIVE_SHIELD.reductionPerNest)}。获得 燃料 30、科研 30，1 名幸存者加入。`,
+      tone: 'good',
+    });
     expect(logLineForEvent(game.state, { type: 'gameOver', status: 'lost', reason: 'coreDestroyed' })).toMatchObject({ tone: 'danger' });
+  });
+
+  it('tells the hive shield when the hive is found and as each ordinary nest falls', () => {
+    const { game } = buildTestWorld();
+    expect(logLineForEvent(game.state, { type: 'nestDiscovered', nestId: 5, isHive: true })?.text).toBe(
+      `发现了母巢。地图上每剩一个巢穴，母巢受到的伤害降低 ${pct(HIVE_SHIELD.reductionPerNest)}。`,
+    );
+    expect(logLineForEvent(game.state, { type: 'nestDiscovered', nestId: 5, isHive: false })?.text).toBe('发现了一个怪物巢穴');
+    const destroyed = { type: 'nestDestroyed' as const, nestId: 5, isHive: false, reward: {}, survivors: 0 };
+    // The count rides on the event: two nests falling between two frames still read 3 and 2.
+    expect(logLineForEvent(game.state, { ...destroyed, nestsLeft: 3 })?.text).toBe(`摧毁了一个巢穴，还剩 3 个，母巢减伤 ${pct(3 * HIVE_SHIELD.reductionPerNest)}。`);
+    // Above the cap the reduction stays put; the line states the count and the reduction, not a drop.
+    expect(logLineForEvent(game.state, { ...destroyed, nestsLeft: 12 })?.text).toBe(`摧毁了一个巢穴，还剩 12 个，母巢减伤 ${pct(HIVE_SHIELD.maxReduction)}。`);
+    expect(logLineForEvent(game.state, { ...destroyed, nestsLeft: 0 })?.text).toBe('巢穴已全部摧毁，母巢不再减伤。');
+    expect(logLineForEvent(game.state, { ...destroyed, nestsLeft: 0, reward: { fuel: 40, research: 40 }, survivors: 2 })?.text).toBe(
+      '巢穴已全部摧毁，母巢不再减伤。获得 燃料 40、科研 40，2 名幸存者加入。',
+    );
+    expect(logLineForEvent(game.state, { ...destroyed, isHive: true, nestsLeft: 0 })?.text).toBe('母巢被摧毁！');
   });
 
   it('shows special ruin feedback verbatim and formats resource bundles', () => {

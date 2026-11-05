@@ -6,7 +6,9 @@ import {
   SIGNAL_STAGE_NAMES,
   buildingHousing,
   buildingYieldPerDay,
+  hiveDamageReduction,
   onsiteWorkerCount,
+  ordinaryNestsLeft,
   perDayToPerMinute,
   soldierWeapon,
   trainingCost,
@@ -22,6 +24,7 @@ import {
   DAMAGE_TYPES,
   DAMAGE_TYPE_NAMES,
   HIVE,
+  HIVE_SHIELD,
   MUTANTS,
   NEST,
   PROMOTIONS,
@@ -37,6 +40,7 @@ import { TICKS_PER_SECOND } from '../../sim/time';
 import { trainsSoldiers } from '../input/rightClick';
 import { isOnMap, type BuildingView, type EntityView, type MutantView, type NestView, type SoldierView, type SurvivorView } from '../view';
 import { availabilityOf, costItems, unavailable, type Availability, type CostItem } from './availability';
+import { formatPercent } from './format';
 
 export interface PromotionOption {
   id: PromotionId;
@@ -162,6 +166,7 @@ export interface NestDetails {
   level: number;
   hp: number;
   maxHp: number;
+  description: string;
 }
 
 export type SelectionPanelModel =
@@ -368,8 +373,24 @@ function mutantDetails(m: MutantView): MutantDetails {
   };
 }
 
-function nestDetails(n: NestView): NestDetails {
-  return { id: n.id, name: n.isHive ? HIVE.name : NEST.name, isHive: n.isHive, level: n.growth.level, hp: Math.ceil(n.hp), maxHp: Math.ceil(n.maxHp) };
+/** The hive's line explains its shield with the ordinary nests left (sim/combat/hiveShield.ts). */
+function nestDescription(view: GameView, n: NestView): string {
+  if (!n.isHive) return '摧毁巢穴可以获得燃料、科研，有时还有幸存者。选中士兵后右键巢穴即可集火。';
+  const rule = `地图上每剩一个普通巢穴，母巢受到的伤害降低 ${formatPercent(HIVE_SHIELD.reductionPerNest)}，最多降低 ${formatPercent(HIVE_SHIELD.maxReduction)}。`;
+  const nests = ordinaryNestsLeft(view);
+  return nests === 0 ? `${rule}普通巢穴已全部摧毁，母巢不再减伤。` : `${rule}现在还剩 ${nests} 个，减伤 ${formatPercent(hiveDamageReduction(nests))}。`;
+}
+
+function nestDetails(view: GameView, n: NestView): NestDetails {
+  return {
+    id: n.id,
+    name: n.isHive ? HIVE.name : NEST.name,
+    isHive: n.isHive,
+    level: n.growth.level,
+    hp: Math.ceil(n.hp),
+    maxHp: Math.ceil(n.maxHp),
+    description: nestDescription(view, n),
+  };
 }
 
 export function selectionPanelModel(game: Game, selection: readonly EntityId[]): SelectionPanelModel {
@@ -383,7 +404,7 @@ export function selectionPanelModel(game: Game, selection: readonly EntityId[]):
     case 'mutant':
       return { kind: 'mutant', mutant: mutantDetails(first) };
     case 'nest':
-      return { kind: 'nest', nest: nestDetails(first) };
+      return { kind: 'nest', nest: nestDetails(view, first) };
     default: {
       const units = entities.filter((e): e is SoldierView | SurvivorView => e.kind === 'soldier' || e.kind === 'survivor');
       if (units.length > 1) {

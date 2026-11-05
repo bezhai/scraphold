@@ -134,7 +134,7 @@ describe('damage', () => {
     const survivors = [...game.state.entities.values()].filter((e) => e.kind === 'survivor');
     expect(survivors).toHaveLength(NEST.reward.survivors);
     const events = drainEvents(game);
-    expect(events).toContainEqual({ type: 'nestDestroyed', nestId: nest.id, isHive: false, reward: { fuel, research }, survivors: NEST.reward.survivors });
+    expect(events).toContainEqual({ type: 'nestDestroyed', nestId: nest.id, isHive: false, nestsLeft: 0, reward: { fuel, research }, survivors: NEST.reward.survivors });
     expect(events).toContainEqual({ type: 'survivorJoined', unitId: survivors[0]!.id, source: 'nest' });
   });
 

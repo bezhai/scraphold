@@ -51,7 +51,8 @@ export type GameEvent =
   | { type: 'nestDiscovered'; nestId: EntityId; isHive: boolean }
   /** Task 3 */
   | { type: 'nestLevelUp'; nestId: EntityId; level: number }
-  | { type: 'nestDestroyed'; nestId: EntityId; isHive: boolean; reward: ResourceAmounts; survivors: number }
+  /** Task 3. nestsLeft: ordinary nests still standing right after this one fell (the hive shield's count). */
+  | { type: 'nestDestroyed'; nestId: EntityId; isHive: boolean; nestsLeft: number; reward: ResourceAmounts; survivors: number }
   | { type: 'promotionReady'; unitId: EntityId }
   | { type: 'gameOver'; status: 'won' | 'lost'; reason: NonNullable<Outcome['reason']> };
 

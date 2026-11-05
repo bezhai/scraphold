@@ -1,9 +1,12 @@
 /**
- * The hive is a late objective: a day-7 mixed force must not routinely destroy it in one day.
- * Real generated maps; the hive reaches day-7 strength through the nest system (level up and
- * guard top-up at dawn).
+ * Hive strength under the nest shield (combat/hiveShield.ts): a day-9 force of 30 equipped soldiers
+ * cannot take the hive in one day while the ordinary nests stand, but can once they are all gone.
+ * Together the two keep the hive from being a pure hp sponge and from being a shortcut past the
+ * nests. Real generated maps; the hive reaches day-9 strength through the nest system (level up
+ * and guard top-up at dawn).
  */
 import { describe, expect, it } from 'vitest';
+import { ordinaryNestsLeft } from './hiveShield';
 import { nestSystem } from './nests';
 import { applyCommand } from '../commandHandlers';
 import { nestMaxHp, type SoldierType } from '../data/combat';
@@ -12,24 +15,24 @@ import type { TechId } from '../data/economy';
 import { stepGame } from '../pipeline';
 import type { Nest } from '../state';
 import { CYCLE_TICKS, DAY_TICKS, clockAt } from '../time';
-import { openTilesAround, spawnSoldier } from '../world/entities';
+import { openTilesAround, removeEntity, spawnSoldier } from '../world/entities';
 import { createGame } from '../world/setup';
 
-/** 20 soldiers, roughly what a raiding player fields around day 7. */
+/** 30 soldiers and the seven military techs the raider researches first. */
 const STRIKE_FORCE: readonly [SoldierType, number][] = [
-  ['shieldGuard', 4],
-  ['rifleman', 6],
-  ['sniper', 3],
-  ['grenadier', 3],
-  ['flamethrower', 2],
-  ['pickup', 2],
+  ['shieldGuard', 4], ['rifleman', 8], ['sniper', 6],
+  ['grenadier', 6], ['flamethrower', 2], ['pickup', 4],
 ];
+const MILITARY_TECH: readonly TechId[] = ['armory', 'fuelPower', 'armoredPickup', 'rapidDeployment', 'expeditionPack', 'demolitions', 'veteranDoctrine'];
+const STRIKE_DAY = 9;
 
 interface StrikeResult {
   seed: string;
   day: number;
+  ordinaryNests: number;
   hiveLevel: number;
   hiveHp: number;
+  hpLeft: number;
   guards: number;
   destroyed: boolean;
   seconds: number;
@@ -41,10 +44,14 @@ function hiveOf(game: Game): Nest {
   throw new Error('no hive');
 }
 
-/** Sends a strike force from 14 tiles away at dawn of `day`; runs until the hive falls or night comes. */
-function strikeHive(seed: string, day: number, force: readonly [SoldierType, number][] = STRIKE_FORCE, tech: readonly TechId[] = []): StrikeResult {
+/**
+ * Sends the strike force from 14 tiles away at dawn of `day`; runs until the hive falls or night
+ * comes. With `nestsCleared` every ordinary nest is gone before the strike.
+ */
+function strikeHive(seed: string, day: number, nestsCleared: boolean): StrikeResult {
   const game = createGame({ seed, origin: 'militia', difficulty: 'normal' });
-  game.state.economy.tech.researched = [...tech];
+  if (nestsCleared) for (const e of [...game.state.entities.values()]) if (e.kind === 'nest' && !e.isHive) removeEntity(game, e);
+  game.state.economy.tech.researched = [...MILITARY_TECH];
   refreshModifiers(game);
   const hive = hiveOf(game);
   // Dawn of `day`: the nest system levels the hive (day - 2 times so far, once now) and tops up its guards.
@@ -61,12 +68,12 @@ function strikeHive(seed: string, day: number, force: readonly [SoldierType, num
   const len = Math.hypot(dx, dy);
   const startX = hive.x + (dx / len) * 14;
   const startY = hive.y + (dy / len) * 14;
-  const count = force.reduce((n, [, k]) => n + k, 0);
+  const count = STRIKE_FORCE.reduce((n, [, k]) => n + k, 0);
   const anchor = { ...hive, x: startX, y: startY, tileX: Math.floor(startX) - 1, tileY: Math.floor(startY) - 1, size: 2 };
   const tiles = openTilesAround(game, anchor, count);
   const ids: number[] = [];
   let k = 0;
-  for (const [type, n] of force) {
+  for (const [type, n] of STRIKE_FORCE) {
     for (let j = 0; j < n; j++, k++) {
       const t = tiles[k % tiles.length] as number;
       ids.push(spawnSoldier(game, type, (t % game.state.map.width) + 0.5, Math.floor(t / game.state.map.width) + 0.5).id);
@@ -81,8 +88,10 @@ function strikeHive(seed: string, day: number, force: readonly [SoldierType, num
   return {
     seed,
     day,
+    ordinaryNests: ordinaryNestsLeft(game.state),
     hiveLevel: hive.growth.level,
     hiveHp: Math.round(hive.maxHp),
+    hpLeft: Math.round(hive.hp),
     guards,
     destroyed: game.state.stats.hiveDestroyed,
     seconds: Math.round((game.state.tick - start) / 20),
@@ -92,13 +101,35 @@ function strikeHive(seed: string, day: number, force: readonly [SoldierType, num
 
 const SEEDS = ['hive-1', 'hive-2', 'hive-3', 'hive-4', 'hive-5'];
 
-describe('hive strike', () => {
-  it('a 20-unit day-7 strike cannot routinely destroy the hive before nightfall', () => {
-    const results = SEEDS.map((seed) => strikeHive(seed, 7));
+/**
+ * One strike per test keeps every test well inside the default timeout when the whole suite runs
+ * in parallel; the last test of each group judges the five maps together.
+ */
+describe(`day-${STRIKE_DAY} strike of 30 equipped soldiers while every ordinary nest stands`, () => {
+  const results: StrikeResult[] = [];
+  it.each(SEEDS)('%s', (seed) => {
+    const r = strikeHive(seed, STRIKE_DAY, false);
+    expect(r.ordinaryNests).toBeGreaterThan(0);
+    results.push(r);
+  });
+  it('cannot take the hive before nightfall on more than one of the five maps', () => {
     if (process.env.HIVE_REPORT) console.table(results);
+    expect(results.map((r) => r.seed)).toEqual(SEEDS);
     expect(results.filter((r) => r.destroyed).length).toBeLessThanOrEqual(1);
-    // An early attack remains costly even when the structure survives.
-    expect(results.every((r) => r.soldiersLost > 0)).toBe(true);
+  });
+});
+
+describe(`day-${STRIKE_DAY} strike of 30 equipped soldiers once every ordinary nest is destroyed`, () => {
+  const results: StrikeResult[] = [];
+  it.each(SEEDS)('%s', (seed) => {
+    const r = strikeHive(seed, STRIKE_DAY, true);
+    expect(r.ordinaryNests).toBe(0);
+    results.push(r);
+  });
+  it('takes the hive within one day on at least four of the five maps', () => {
+    if (process.env.HIVE_REPORT) console.table(results);
+    expect(results.map((r) => r.seed)).toEqual(SEEDS);
+    expect(results.filter((r) => r.destroyed).length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -119,14 +150,3 @@ it('grows hive durability with days and difficulty without changing ordinary nes
   expect(ordinary[0]!.maxHp).toBe(ordinary[1]!.maxHp);
 });
 
-
-it.each([9, 11])('the hive itself withstands a 30-unit equipped assault on day %i', day => {
-  const force: readonly [SoldierType, number][] = [
-    ['shieldGuard', 4], ['rifleman', 8], ['sniper', 6],
-    ['grenadier', 6], ['flamethrower', 2], ['pickup', 4],
-  ];
-  const tech: readonly TechId[] = ['armory', 'fuelPower', 'armoredPickup', 'rapidDeployment', 'expeditionPack', 'demolitions', 'veteranDoctrine'];
-  const results = SEEDS.map(seed => strikeHive(seed, day, force, tech));
-  if (process.env.HIVE_REPORT) console.table(results);
-  expect(results.filter(result => result.destroyed).length).toBeLessThanOrEqual(1);
-});

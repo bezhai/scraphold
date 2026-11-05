@@ -429,8 +429,8 @@ export const NEST: NestDef = {
 export const HIVE: NestDef = {
   name: '母巢',
   size: 3,
-  hp: 100000,
-  hpPerLevel: 1600,
+  hp: 15800,
+  hpPerLevel: 800,
   maxLevel: 20,
   guardsBase: 10,
   guardsPerLevel: 2,
@@ -439,6 +439,15 @@ export const HIVE: NestDef = {
   nightThreatPerLevel: 1.5,
   growthPointsPerLevel: 20,
   reward: { fuel: 0, research: 0, fuelPerLevel: 0, researchPerLevel: 0, survivors: 0 },
+};
+
+/**
+ * Hive shield (combat/hiveShield.ts): each ordinary nest left on the map, discovered or not, cuts
+ * the damage the hive takes by reductionPerNest, up to maxReduction; none left, full damage.
+ */
+export const HIVE_SHIELD = {
+  reductionPerNest: 0.1,
+  maxReduction: 0.8,
 };
 
 // ---------------------------------------------------------------------------------------------

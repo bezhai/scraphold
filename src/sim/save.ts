@@ -7,7 +7,7 @@ import type { Entity, GameState, MapState } from './state';
 import { rebuildSpatialIndex } from './world/spatial';
 
 /** Increment whenever the authoritative state or its interpretation changes incompatibly. */
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 type StoredState = Omit<GameState, 'map' | 'fog' | 'entities'> & {
   map: Omit<MapState, 'terrain'> & { terrain: number[] };

@@ -5,12 +5,12 @@
  * from the first dusk tick to dawn), so it joins the log as an entry dated at its dusk
  * (withBroadcast).
  */
-import { INCIDENT_TARGETS, type GameEvent, type GameView } from '../../sim';
-import { MUTANTS, SOLDIERS, type SoldierType } from '../../sim/data/combat';
+import { INCIDENT_TARGETS, hiveDamageReduction, type GameEvent, type GameView } from '../../sim';
+import { HIVE_SHIELD, MUTANTS, SOLDIERS, type SoldierType } from '../../sim/data/combat';
 import { BUILDINGS, RESOURCES, INSPIRATION_BOOST, RESOURCE_NAMES, TECHS, type BuildingType, type RuinReward } from '../../sim/data/economy';
 import { tileCenter } from '../../sim/map/grid';
 import { CYCLE_TICKS, DAY_TICKS, DUSK_TICKS, TICKS_PER_SECOND, TOTAL_NIGHTS } from '../../sim/time';
-import { formatAmounts } from './format';
+import { formatAmounts, formatPercent } from './format';
 
 export type LogTone = 'info' | 'good' | 'warn' | 'danger';
 
@@ -104,14 +104,22 @@ export function logLineForEvent(view: GameView, event: GameEvent): LogLine | nul
     case 'hunger':
       return event.hungry ? line('食物不足：士兵今夜挨饿，战斗力下降', 'danger') : line('口粮充足，士兵吃饱了', 'good');
     case 'nestDiscovered':
-      return line(event.isHive ? '发现了母巢！摧毁它可以提前获胜' : '发现了一个怪物巢穴', 'warn', positionOf(view, event.nestId));
+      return line(
+        event.isHive ? `发现了母巢。地图上每剩一个巢穴，母巢受到的伤害降低 ${formatPercent(HIVE_SHIELD.reductionPerNest)}。` : '发现了一个怪物巢穴',
+        'warn',
+        positionOf(view, event.nestId),
+      );
     case 'nestLevelUp':
       return line(`巢穴成长到 ${event.level} 级`, 'warn', positionOf(view, event.nestId));
     case 'nestDestroyed': {
       if (event.isHive) return line('母巢被摧毁！', 'good');
+      // The hive shield after this nest (count taken when it fell), then the reward.
+      const shield = event.nestsLeft > 0
+        ? `摧毁了一个巢穴，还剩 ${event.nestsLeft} 个，母巢减伤 ${formatPercent(hiveDamageReduction(event.nestsLeft))}。`
+        : '巢穴已全部摧毁，母巢不再减伤。';
       const parts = [formatAmounts(event.reward)].filter((s) => s.length > 0).map((s) => `获得 ${s}`);
       if (event.survivors > 0) parts.push(`${event.survivors} 名幸存者加入`);
-      return line(parts.length > 0 ? `摧毁巢穴：${parts.join('，')}` : '摧毁了一个巢穴', 'good');
+      return line(parts.length > 0 ? `${shield}${parts.join('，')}。` : shield, 'good');
     }
     case 'promotionReady':
       return line('有士兵升为老兵，可以选择强化', 'good', positionOf(view, event.unitId));

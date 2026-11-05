@@ -69,7 +69,8 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 - `calendar: CalendarState`：`nights[night - 1] = {night, type}`，夜晚从 1 开始，共 `TOTAL_NIGHTS` 项。`NightType` 为 `calm | raid | rustStorm | denseFog | surge`。**权威状态本身只保存公开项的类型，未公开项为 null**，所以直接读取 `game.state` 或 `viewState(game)` 都读不到未来类型。`revealedThroughNight` 初值 4，每天增加到 `min(20, day + 3)`；已公开的历史不隐藏。`CALENDAR.previewNights = 3` 指今晚之外再公开未来 3 晚。
 - 完整日历在开局从 `rng.calendar` 生成，生成前的随机流快照保存在 `calendar.generationRng`。`game.calendarPlan` 是由该快照和难度完全重建的派生缓存，不属于 `GameView`，客户端和机器人不得读取。恢复存档时从快照副本重建，不消耗正在使用的随机流；不把未来类型数组放进客户端可读状态。黄昏播报随后使用 `rng.calendar`，不会改变已定日历。
 - 日历固定第 1 夜为平静，第 20 夜为大潮；在 `[5,6]`、`[9,11]`、`[14,16]`、`[20,20]` 各选一次大潮，并约束相邻大潮间隔 4–6 天。相同种子在各难度使用同一组大潮日期，便于比较。按难度数据填入其他夜晚，回溯保证平静夜不连续超过 2 晚，且每个日历前缀的边缘进攻夜比例不超过 `CALENDAR.maxEdgeNightShare = 0.65`；提前结束的对局也受此约束。无随机重试次数上限导致的偶发失败。由此前缀约束可推出：前 3 夜最多 1 个边缘进攻夜；普通/困难各有 13 个进攻夜，第 18 夜前最多安排 11 个，因此第 19 夜必为进攻夜。静夜也倾向前置：普通 `balance-1` 至 `balance-20` 样本，第 1–10 夜平静/风暴合计 87 次，第 11–20 夜 53 次；这是样本分布，非额外固定配额。设计上接受开局建设时间较多、后期压力递增。
-- 难度数据新增 `calmNights/stormNights/denseFogNights/surgeBudgetMultiplier`。简单为 `6/2/2/1.3`，普通为 `5/2/3/1.5`，困难为 `4/3/4/1.7`；余下非大潮夜为普通夜袭。因此无边缘夜袭分别为 8/7/7 晚。大潮预算为 `NIGHTS[n-1].budget × nightBudgetPct × surgeBudgetMultiplier`，额外增加一个方向，最多使用实际存在的出生点。预算表中的 `boss` 是该日发生大潮时的候选首领，普通夜袭和浓雾不使用；第一次首领跟随第一个大潮，第 20 夜必有首领。普通巢穴/母巢等级上限为 12/20。母巢基础生命 100000，每级增加 1600；守卫为 10 + 2 × 等级。`DifficultyDef.hiveHpPct` 在简单/普通/困难分别为 0.8/1/1.2，仅缩放母巢生命；实体创建和成长共用 `nestMaxHp`，每天及撤退吸收仍可提升等级，增加生命上限时只补本次增加量。普通巢穴专属生命、成长和守卫配置不变，怪物伤害仍使用难度的全局倍率；母巢不分裂。
+- 难度数据新增 `calmNights/stormNights/denseFogNights/surgeBudgetMultiplier`。简单为 `6/2/2/1.3`，普通为 `5/2/3/1.5`，困难为 `4/3/4/1.7`；余下非大潮夜为普通夜袭。因此无边缘夜袭分别为 8/7/7 晚。大潮预算为 `NIGHTS[n-1].budget × nightBudgetPct × surgeBudgetMultiplier`，额外增加一个方向，最多使用实际存在的出生点。预算表中的 `boss` 是该日发生大潮时的候选首领，普通夜袭和浓雾不使用；第一次首领跟随第一个大潮，第 20 夜必有首领。普通巢穴/母巢等级上限为 12/20。母巢基础生命 15800，每级增加 800（普通难度第 9 天天亮时 9 级、22200）；守卫为 10 + 2 × 等级。`DifficultyDef.hiveHpPct` 在简单/普通/困难分别为 0.8/1/1.2，仅缩放母巢生命；实体创建和成长共用 `nestMaxHp`，每天及撤退吸收仍可提升等级，增加生命上限时只补本次增加量。普通巢穴专属生命、成长和守卫配置不变，怪物伤害仍使用难度的全局倍率；母巢不分裂。
+- **巢穴护盾**（`combat/hiveShield.ts`，数值在 `data/combat.ts` 的 `HIVE_SHIELD`）：地图上每剩一个普通巢穴（不含母巢；未发现的和分裂事件生成的都算；本 tick 已被打到 0 血、尚待 cleanup 移除的不算），母巢受到的伤害降低 `reductionPerNest`（0.1），合计最多降低 `maxReduction`（0.8）；普通巢穴全部摧毁后母巢不再减伤，普通巢穴自身从不减伤。规则只定义在 `ordinaryNestsLeft(state)` 和 `hiveDamageReduction(nestsLeft)` 两个函数里：`combat/damage.ts:hitDamage` 对母巢乘 `1 - hiveDamageReduction(ordinaryNestsLeft(state))`，所有武器伤害（单发、溅射、锥形、各兵种）都经 `applyHit → hitDamage` 结算，目标选择的 `expectedDamage` 也读同一个 `hitDamage`；环境伤害（锈风暴、事件减员）只作用于玩家实体，不会落到母巢上。两个函数从 `sim/index.ts` 导出，客户端和机器人读它们，不另写比例。`nestDestroyed` 事件新增 `nestsLeft`：这座巢穴倒下后还剩的普通巢穴数，日志按事件发生时的数量显示，不受一帧推进多个 tick 的影响。设计意图：上一版把母巢生命提到 10 万挡早期速推，结果成了血缸（第 10 天约 11.4 万，10 个步枪手要打 18 分钟游戏时间）；现在由护盾挡速推，生命降回 2 万量级，清完普通巢穴后一支中期部队一个白天能打掉。
 - 平静夜只保留巢穴攻击组；锈风暴不产生边缘或巢穴攻击组，已有守卫仍按既有规则行动。其他夜晚正常生成夜袭，浓雾夜隐藏方向。
 - `NightForecast.directionsKnown` 明确表示是否知道方向。浓雾固定 `{directionsKnown:false, precise:false, groups:[]}`，瞭望塔不能解除；其他类型为 true，空组表示没有进攻组。`night.plan` 是模拟规则使用的真实计划，客户端和机器人不得用它推断浓雾方向。
 - `night.broadcast: {night, type, text} | null`：黄昏第一个 tick 写入当晚的完整播报，持续到天亮后清空。普通夜晚按类型从 `RADIO_BROADCASTS` 用种子选取（每种类型只有一条，但仍用 `pick` 抽取，保证日历随机数的消耗不变），第 20 夜固定 `FINAL_RADIO_BROADCAST`。文案及日历提示逐字取自 `docs/narrative.md`；本轮只提供状态，日志展现由客户端任务接入。
@@ -86,7 +87,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 - `researchAnnounced` 保证首次开始破译研究只发一次消息。原 `unmannedAnnounced` 已删除，改为 `constructionStaffed`（本次施工曾有在岗工人）、`unmannedSinceTick`（连续无人起点，-1 表示未计时）及 `lastUnmannedDay`（最近提示日，初值 0）。连续无人 15 秒才发提示（`SIGNAL.unmannedDelaySeconds`）；首次派工的在途时间不计；工人回来清空计时，可再次触发，但同一天最多一次，重建也不绕过同日限制。
 - `GameEvent.signalMessage.text` 直接输出完整 narrative 原文模板。开播后首个天亮使用 `SIGNAL_TEXT.dawn`（带“收到你们的信号”），之后使用 `SIGNAL_TEXT.convoy`，将 N 替换为还需守住的晚数；不计数的首晚仍播报剩余晚数。满额天亮不发长明城的回复，直接输出救援尾声。被毁重启后重新使用首句。事件只供显示，不反推玩法状态。
 - 广播定向攻击沿用 `AttackGroup.assaultTargetId → PendingSpawn.assaultTargetId → MutantAi.assaultTargetId`（0 为核心）。开播指令不修改任何已经规划、待生成或在场怪物的目标；之后的夜袭规划从新生成的方向队伍/巢穴队伍中指定恰好一组攻塔，平静夜仅从巢穴队伍中选择；不额外提高预算，风暴不刷怪。塔方向与核心方向共用流场算法，缓存按目标 id 与 navVersion 重建，阻路建筑仍须先被摧毁；塔消失时退回核心目标。
-- `VictoryMethod = survived | hiveDestroyed | signal` 直接用于 `outcome.reason` 和 `gameOver.reason`。三种胜利基础分分别为 1500、1750（1500 + hive 250）、2000（1500 + signal 500）；母巢和信号塔提前胜利均按完整剩余天数每昼夜 +50；每摧毁一座巢穴 +80、每名存活幸存者 +10、每座非路障建筑损失 -10，难度乘数不变。核心同 tick 被毁优先判负。
+- `VictoryMethod = survived | hiveDestroyed | signal` 直接用于 `outcome.reason` 和 `gameOver.reason`。三种胜利基础分分别为 1500、1750（1500 + hive 250）、2000（1500 + signal 500）；母巢和信号塔提前胜利均按完整剩余天数每昼夜 +50；每摧毁一座巢穴 +80、每名存活幸存者 +10、每座非路障建筑损失 -10，难度乘数不变。核心同 tick 被毁优先判负。巢穴护盾没有改计分；母巢胜利通常先清掉全部普通巢穴，每座 +80 已计在 `nests` 分项里。
 
 指令契约（旧的 `decodeSignal/startSignalRepair/assignSignalWorkers/unassignSignalWorkers` 已删除，不提供兼容别名）：
 
@@ -158,7 +159,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 ### 自动存档
 
 - `serializeGame(game: Pick<Game, 'state'>): string` 返回 JSON 字符串；`restoreGame(text: string): Game | null` 恢复整局。调用者负责 localStorage/IndexedDB、存储键和写入时机。
-- 格式是 `{version: SAVE_VERSION, hash, state}`，当前 `SAVE_VERSION = 11`（母巢生命及成长规则不兼容旧局；拒绝所有旧版存档）。状态里的 `entities` 按创建顺序编码为条目数组，`terrain/fog` 编码为数值数组；JSON 无法保留的负零使用保留标记 `{$number:'-0'}`。所有其他状态字段直接保留，不筛选动态 payload。
+- 格式是 `{version: SAVE_VERSION, hash, state}`，当前 `SAVE_VERSION = 12`（巢穴护盾和母巢生命 15800 + 800/级不兼容旧局；拒绝所有旧版存档）。状态里的 `entities` 按创建顺序编码为条目数组，`terrain/fog` 编码为数值数组；JSON 无法保留的负零使用保留标记 `{$number:'-0'}`。所有其他状态字段直接保留，不筛选动态 payload。
 - 版本不匹配、JSON 损坏、数组非法或状态哈希不匹配时返回 null，不迁移、不部分恢复。状态结构或规则发生不兼容变更时提升格式版本。
 - 恢复不调用 `createGame`、不消耗 RNG、不重新揭开迷雾；重建完整日历缓存、导航/流场、空间索引、修正汇总，事件输出队列为空。恢复后的状态哈希必须完全一致，随后同指令继续推进的哈希和输出事件也必须一致。
 - 本任务仅提供模拟层存档；“继续游戏”、自动保存时机、最佳成绩新存储键以及事件卡暂停由客户端任务完成。
@@ -249,7 +250,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 数值都在模拟层的数据表里，按归属分两份文件，便于任务 2、3 并行调整：
 
 - `data/economy.ts`（任务 2）：资源、开局资源和幸存者数、幸存者属性、增长、口粮、维修、建造、训练、13 种建筑、遗迹奖励表、15 项科技（三条线各 5 项，含灵感条件）、11 张政令、3 个营地特性。
-- `data/combat.ts`（任务 3）：伤害类型 × 护甲类型倍率表、7 个兵种（含训练建筑、科技、老兵击杀数和两个强化选项）、14 个强化、饥饿惩罚、机枪塔武器、6 种怪物、巢穴和母巢、20 夜的预算和组成（首领仅在日历大潮夜出现）、预报阈值、警报间隔、3 档难度、计分。
+- `data/combat.ts`（任务 3）：伤害类型 × 护甲类型倍率表、7 个兵种（含训练建筑、科技、老兵击杀数和两个强化选项）、14 个强化、饥饿惩罚、机枪塔武器、6 种怪物、巢穴和母巢、母巢护盾 `HIVE_SHIELD`、20 夜的预算和组成（首领仅在日历大潮夜出现）、预报阈值、警报间隔、3 档难度、计分。
 - `data/map.ts`（任务 1）：地形定义和地图生成参数。
 
 `data/data.test.ts` 检查数据的完整性（引用存在、科技无环、每种怪物有克制兵种等）。改数值不需要改这个测试；改结构时同步更新。
@@ -290,7 +291,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 机器人仍只读公开状态：当前威胁沿用 `estimateThreat`，训练准备额外考虑已公布的一、两晚后的进攻预算（分别乘 0.75、0.5）。遗迹搜索半径从 16 提到 30，保留邻近已知巢穴的避让。救援必须能留下三名守军、另派三名健康战士；分裂巢穴沿用共享战力门槛。劫掠者仅在废料不少于 500 时考虑支付，过热仅在燃料不少于 50 时考虑支付；八名以上士兵优先威慑。工事策略优先塔类事件奖励、风暴准备和快速维修，维修先保核心、再非路障建筑，最后路障。
 
-经济策略从第六天扩军，第八天起清理普通巢穴，出击时保留十二名守军保护生产区，以较少的远征兵力承担巢穴持续成长的后期风险。清巢策略清理普通巢穴时留三人驻防，母巢远征则保留八人并优先让新兵补足阵亡驻军；`RaidPlan.hive.homeGuard` 单独规定持续攻城的驻防人数。最低工人数固定为人口的 35%（至少四人），不按日期提高军队下限；从第八天起，根据已发现母巢的等级和剩余生命估算进攻战力。`hiveAssaultPower` 取守卫估值的 40% 与剩余生命除以两个半昼夜预期结构输出的较大值；`raidTargets` 分别接收 `combat/structure` 两种战力：守卫条件按剩余血量折算生存战力，拆除母巢的时间按存活士兵的完整武器输出估算，受伤本身不降低攻击伤害。完成远征背包后，训练目标至少为完整守卫估值与上述攻城估值较大者的 1.4 倍。母巢决战可以跨夜持续；驻军优先获得补兵，前线不因受伤战力低于出发时的 45% 而回营（游戏没有回营治疗），直到母巢被毁或突击部队全部阵亡才结束。普通巢穴仍按返程时间和 45% 战力撤退条件控制。信号策略侦察并到访中继站、研究破译与供能、派三工修塔、预先安排燃料供应；修塔及为修塔预留资源均从第八天起；开播须在白天、今夜及未来两晚均非大潮、塔血量至少 85%、总兵力至少六人且两名健康护卫已到场。护卫目标人数为三人与兵力的 30% 之间的较大值，初次派出时至少留下四人守家；塔被毁后召回护卫；尚未广播时若今夜或未来两晚有大潮则召回护卫，已广播时保留现有护卫但不再增派。研究列表必须逐项满足前置闭包，见 `bots/research.test.ts`；`signalStrategy()` 与正式信号控制器共用同一份计划，明确保留第 4 天扩军，不跟随经济策略的第 6 天参数。计划内科技与北方信号赠送的科技分别统计，不能将赠送项目计入计划标价。
+经济策略从第六天扩军，第八天起清理普通巢穴，出击时保留十二名守军保护生产区，以较少的远征兵力承担巢穴持续成长的后期风险。清巢策略清理普通巢穴时留三人驻防，母巢远征则保留八人并优先让新兵补足阵亡驻军；`RaidPlan.hive.homeGuard` 单独规定持续攻城的驻防人数。最低工人数固定为人口的 35%（至少四人），不按日期提高军队下限；从第八天起，根据已发现母巢的等级、剩余生命和巢穴护盾估算进攻战力。`raidTargets` 先列普通巢穴、最后才是母巢，所以清巢策略先清普通巢穴（每剩一座母巢就多一层减伤）。`hiveAssaultPower(nest, damageTaken)` 取守卫估值的 40% 与「剩余生命 ÷ 护盾放过的伤害比例 ÷ 一个白天（60 秒）的预期结构输出」的较大值；护盾比例由 `hiveDamageTaken(game) = 1 - hiveDamageReduction(ordinaryNestsLeft(state))` 给出，剩余普通巢穴数玩家在目标卡上看得到，机器人不读其他看不到的信息。预算从上一版的两个半昼夜缩到一个白天：母巢只剩 2 万量级的生命，拖过天亮会遇到补满的守卫和升级，所以等突击部队能在一个白天内打掉时才出发。这个预算决定清巢策略打母巢的时间：两个半昼夜时它在第 8 天清完普通巢穴就出发（普通母巢胜利中位第 8 天，得分中位 3070），70 秒时中位第 12 天，60 秒时（含母巢生命 15800 + 800/级）中位第 15 天、得分中位 2700，三种胜利得分中位数比 1.38。`raidTargets` 分别接收 `combat/structure` 两种战力：守卫条件按剩余血量折算生存战力，拆除母巢的时间按存活士兵的完整武器输出估算，受伤本身不降低攻击伤害。完成远征背包后，训练目标至少为完整守卫估值与不计护盾的攻城估值较大者的 1.4 倍（计划是先清巢，再打失去护盾的母巢）。母巢决战可以跨夜持续；驻军优先获得补兵，前线不因受伤战力低于出发时的 45% 而回营（游戏没有回营治疗），直到母巢被毁或突击部队全部阵亡才结束。普通巢穴仍按返程时间和 45% 战力撤退条件控制。信号策略侦察并到访中继站、研究破译与供能、派三工修塔、预先安排燃料供应；修塔及为修塔预留资源均从第八天起；开播须在白天、今夜及未来两晚均非大潮、塔血量至少 85%、总兵力至少六人且两名健康护卫已到场。护卫目标人数为三人与兵力的 30% 之间的较大值，初次派出时至少留下四人守家；塔被毁后召回护卫；尚未广播时若今夜或未来两晚有大潮则召回护卫，已广播时保留现有护卫但不再增派。研究列表必须逐项满足前置闭包，见 `bots/research.test.ts`；`signalStrategy()` 与正式信号控制器共用同一份计划，明确保留第 4 天扩军，不跟随经济策略的第 6 天参数。计划内科技与北方信号赠送的科技分别统计，不能将赠送项目计入计划标价。
 
 第 2 夜边缘预算为 22、方向数为 1；新增 `NightDef.nestBudgetPct`（第 2 夜 0.25，其余 1）。`combat/nests.ts:nestNightThreat(nest, night, difficulty)` 为夜袭计划和机器人共享的巢穴预算函数，不影响白天守卫、巢穴生命、成长或奖励。预报不展示预算不足、没有任何单位的进攻组。`createGame` 在返回前用共享 `housingCapacity` 初始化住房上限，tick 0 即可显示正确数值。
 
@@ -310,6 +311,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 客户端显示的数值（射程圈、老兵进度、每分钟产出、建筑产出、住房、放置加成、视野）都调模拟层的函数算，不在客户端重写规则。这些函数从 `sim/index.ts` 导出，参数只要求用到的字段（`Pick<...>`），所以 `GameView` 里的只读实体可以直接传进去：
 
 - 战斗：`soldierWeapon`、`mutantWeapon`、`towerWeapon`（工地返回 null）、`towerWeaponOfType`（放置预览用）、`veteranThreshold`（`max(1, round(击杀数 × (1 + 加成)))`）、`compassDirection`。
+- 巢穴护盾：`ordinaryNestsLeft(state)`（地图上还剩的普通巢穴数，含未发现的）、`hiveDamageReduction(nestsLeft)`（母巢减伤比例，0 到上限）。界面上的 10%、80% 用 `HIVE_SHIELD.reductionPerNest/maxReduction` 经 `hud/format.ts:formatPercent` 显示，不写死。
 - 经济：`buildingYieldPerDay`（一座建筑按当前工人、地形和加成每天的产出）、`perDayToPerMinute`、`RATE_PERIOD_SECONDS`（产出按一个完整昼夜计）、`bonusTerrainTiles`（放置预览里高亮的加成格）、`placementBonusPct`、`terrainBonusPct`、`buildingHousing`、`populationCount`。
 - 视野：`visionRadius`（实体视野加全局视野加成）。
 
@@ -330,9 +332,9 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 客户端只通过 `src/sim/index.ts` 读状态、下指令。下面每一项都写明了数据和可用性从哪里来，界面不另写规则。
 
 - **雾情日历**（`hud/calendar.ts`、`ui/CalendarStrip.tsx`）：在顶栏右侧的时间区，显示今晚和之后 `CALENDAR.previewNights`（3）晚。每格两行，上面是“今晚”或“第 N 夜”，下面是类型名，按夜晚类型着色。类型用 `nightType(view, night)` 读 `calendar.nights[night - 1]`。悬停卡的标题是“雾情日历”，每晚一行“今晚（第 N 夜）· 类型名”或“第 N 夜 · 类型名”，下面是 `NIGHT_TYPE_DESCRIPTIONS` 里的一句话说明（与 narrative.md 一致），不给防守或兵种建议。锈风暴过后的白天，悬停卡另起一行写视野降低了多少，数值用 `weatherVisionMultiplier` 算，研究“雾气过滤”后为 0，这一行不显示。胜利目标卡打开时悬停卡不出现，两者挂在同一位置，不会重叠。
-- **胜利目标**（`hud/objectives.ts`、`ui/ObjectivesPanel.tsx`）：顶栏中间是“目标 (O)”按钮，按钮本身不显示进度。按钮或 O 键打开一张卡，坚守、清巢、求援三条路线各一行状态：现在是第几天；母巢还没找到，或母巢生命百分比；信号塔按阶段写“找到 K-7 中继站并研究旧频段破译”、修建进度和在岗工人（`onsiteWorkerCount` / `workerSlots`）、“随时可以开始广播”或已守住几晚。事件目标点不在卡里列出，只标在地图上。
+- **胜利目标**（`hud/objectives.ts`、`ui/ObjectivesPanel.tsx`）：顶栏中间是“目标 (O)”按钮，按钮本身不显示进度。按钮或 O 键打开一张卡，坚守、清巢、求援三条路线各一行状态：现在是第几天；母巢一行按 narrative.md「母巢」一节：没找到时写“母巢还没有找到。地图上每剩一个巢穴，母巢受到的伤害降低 10%。”，找到后写生命百分比，再接“还剩 n 个巢穴，母巢受到的伤害降低 p%。”或“巢穴已全部摧毁，母巢不再减伤。”，摧毁后写“母巢已经摧毁。”（数字来自 `ordinaryNestsLeft`、`hiveDamageReduction` 和 `HIVE_SHIELD`）；信号塔按阶段写“找到 K-7 中继站并研究旧频段破译”、修建进度和在岗工人（`onsiteWorkerCount` / `workerSlots`）、“随时可以开始广播”或已守住几晚。事件目标点不在卡里列出，只标在地图上。
 - **白天事件卡**（`hud/incidents.ts`、`ui/IncidentModal.tsx`、`session.ts`）：`state.incidents.pending` 出现新事件时卡片自动打开；有 autopilot（debug 钩子接入的机器人）时不打开，由机器人自己处理。`Session.incidentModalOpen` 是只读属性，表示待处理事件存在并且正是卡片对应的那个。卡片打开时时间停住，但不改玩家自己的 `paused`，关闭后按玩家原来的暂停状态继续。卡片打开时键盘只认 1–3（选选项）、Esc（“查看地图”，事件保持待处理）和 Tab，其他快捷键、编队数字键和镜头平移都不生效。这套拦截和开局介绍卡共用一处：`Session.modalCard` 给出当前在最前面的模态卡（`'intro'`、`'incident'` 或 null，介绍卡优先），`input/domInput.ts` 把它作为 `actionForKey` 的 `modal` 上下文传给 `input/keymap.ts`，由 `MODAL_CARD_KEYS` 查这张卡认哪些键；`modalCard` 不为空时 `pan` 直接返回，键盘和鼠标贴边都不移动镜头。选项能否点选和不可选的原因只来自 `validateCommand(game, {type:'resolveIncident', ...})` 和 `REJECT_REASON_TEXT`，选项下方的小字直接显示 `choices[].description`。卡片里没有倒计时（打开时时间是停的），黄昏时多一行“天黑前不处理，会按最后一个选项结算”。卡片里不用 emoji。
-- **事件日志**（`hud/eventLog.ts`、`ui/EventLog.tsx`）：有待处理事件时，日志顶部常驻一条“待处理：{title}（点击或按 Tab 打开）”，点击重新打开卡片；黄昏时后面加“· 天黑还剩 {s} 秒”（按 `deadlineTick` 换算成游戏秒数），最后 10 秒闪烁。选项结算后显示模拟层给的反馈原文；接受目标点时写“{title}：目标点已经标在地图上，{N} 天内到达”，点击这一行镜头跳到目标点。黄昏无线电播报读 `night.broadcast`，作为一条日志插在黄昏那一行后面。目标点完成或过期、遗迹残页和信号塔台词（`signalMessage`）也各占一行。
+- **事件日志**（`hud/eventLog.ts`、`ui/EventLog.tsx`）：有待处理事件时，日志顶部常驻一条“待处理：{title}（点击或按 Tab 打开）”，点击重新打开卡片；黄昏时后面加“· 天黑还剩 {s} 秒”（按 `deadlineTick` 换算成游戏秒数），最后 10 秒闪烁。选项结算后显示模拟层给的反馈原文；接受目标点时写“{title}：目标点已经标在地图上，{N} 天内到达”，点击这一行镜头跳到目标点。黄昏无线电播报读 `night.broadcast`，作为一条日志插在黄昏那一行后面。目标点完成或过期、遗迹残页和信号塔台词（`signalMessage`）也各占一行。发现母巢写“发现了母巢。地图上每剩一个巢穴，母巢受到的伤害降低 10%。”；摧毁普通巢穴的那一行先说护盾，再接奖励：“摧毁了一个巢穴，还剩 n 个，母巢减伤 p%。获得 燃料 40、科研 40，2 名幸存者加入。”，最后一座写“巢穴已全部摧毁，母巢不再减伤。获得 ……”，n 和 p 按事件里的 `nestsLeft` 算。不写“降到”，因为普通巢穴多于 8 个时减伤停在 80%，摧毁一座并不降低减伤。原来的“摧毁巢穴：获得 ……”被这两句替换，不再分两次说摧毁了巢穴。选中母巢时面板说明（`hud/selectionPanel.ts` 的 `NestDetails.description`）写护盾规则和当前剩余数、减伤；普通巢穴全灭后改写“普通巢穴已全部摧毁，母巢不再减伤。”；帮助页“目标”下多一行母巢护盾说明。
 - **目标点**（`render/objectiveMarkers.ts`、`render/overlays.ts`、`render/minimap.ts`）：`objectiveMarkers` 汇总地图上要指出的东西：`state.incidents.targets` 里 `status === 'active'` 的目标点，标签“{title} · 剩 m:ss”，按 `max(0, expiresTick - tick) / TICKS_PER_SECOND` 换算游戏时间；事件卡还没处理时 `pending.target` 的位置，标签“{title}（未决定）”；发现后的中继站（名字和阶段）；见过的母巢。`drawObjectiveMarkers` 在目标位于屏幕内时，给目标点画一个圆环（已接受为实线，未决定为虚线），给中继站和母巢只在占地上方画标签和指向它的小三角，不压住塔身；目标在屏幕外或被 HUD 面板挡住时，在屏幕边缘画箭头和标签（落点见“边缘箭头”），未决定的箭头是虚线轮廓。小地图用实心橙点标已接受的目标点，用虚线圈标未决定的。
 - **特殊遗迹**（`render/terrainLayer.ts`、`hud/terrainHint.ts`）：遗迹按 `state.map.ruins[].kind` 画进每局只画一次的静态地形画布（`paintRuin`）：普通遗迹是地基和碎块，坠落的补给舱是坑里的轨道补给舱，旧时代仓库是混凝土框里的厚金属门。鼠标悬停时，左下角的地形提示显示 `SPECIAL_RUINS[kind].name` 和 `description`。
 - **中继站和信号塔**：没建塔时，渲染器在中继站原址画废墟（`renderer.ts` 的 `drawRelayRuins`）。塔从建造栏放到中继站原址（`placeBuilding`，能不能放由模拟层判断）。选中幸存者右键塔的工地发出 `assignWork`（`input/rightClick.ts`；模拟层对信号塔不计助建，所以不发 `repair`）。阶段名统一用 `SIGNAL_STAGE_NAMES`（未破译 / 修建中 / 可以广播 / 广播中），地图上中继站的标签和选中塔时的面板都读它；广播中面板改为“广播中 · 已守住 n/m 晚”；“开始广播”按钮下 `startSignalBroadcast`，能否点击用 `validateCommand`。`render/drawBuildings.ts` 画塔身、闪烁的航标灯和施工时的焊接火花（塔有指派工人时），广播中由 `overlays.ts` 的 `drawBroadcastPulseRings` 画向外扩散的圆环。
@@ -358,7 +360,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 上一轮报告的 **23/23 PASS 指新 v2 检查集**，不是保留全部 v1 附加指标。删除的附加检查为：策略两两训练兵种构成距离至少 0.35；第 6–20 夜有损失的对局占多数；终局未用废料与食物低于累计获取量的 25%；三个营地的主动策略胜率跨度不超过 20 个百分点。这些不属于 v2 spec 的验收指标。原“第 3 夜前失败”改为“首次大潮前失败”，普通胜率门槛 60% 改为 spec 的 55%；保留每套策略至少两个同图败局而其他策略获胜的检查。上一轮另新增胜利路线、信号归属、实际夜袭比例及同图得分比较。
 
-此前在这 23 项上新增 7 项检查：四策略困难胜率分别至少 20%、普通清巢母巢胜利中位日期至少 13、困难母巢中位日期不早于普通、普通三种胜利分数中位数最大/最小不超过 1.5。缺失母巢胜利或某条计分路线时检查失败，不以缺失样本视作通过。本轮新增普通母巢胜利中第 11 天及以前不超过 10%，合计 31 项检查。
+此前在这 23 项上新增 7 项检查：四策略困难胜率分别至少 20%、普通清巢母巢胜利中位日期至少 13、困难母巢中位日期不早于普通、普通三种胜利分数中位数最大/最小不超过 1.5。缺失母巢胜利或某条计分路线时检查失败，不以缺失样本视作通过。上一轮新增的“普通母巢胜利中第 11 天及以前不超过 10%”和“普通清巢母巢胜利中位日期至少 13”在巢穴护盾这一轮删除，换成一项“普通难度母巢胜利（不分策略）中位天数在第 11–16 天之间，且至少 10 局母巢胜利”，合计 30 项检查。原来两条是为挡住 10 万血母巢之前的早期速推；现在早期速推由护盾挡住，母巢胜利的时间只要求落在中段。
 
 
 研究计划按当前完整前置顺序计算，科技树标价总计 4020（灵感折扣前）；这些是计划标价，不是实际累计科研产出：

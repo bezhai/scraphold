@@ -4,8 +4,10 @@
  * defense, and the full key reference. Time stands still while it is open.
  */
 import { DAY_SECONDS, DUSK_SECONDS, NIGHT_SECONDS } from '../../sim/time';
+import { HIVE_SHIELD } from '../../sim/data/combat';
 import { BUILDINGS } from '../../sim/data/economy';
 import { TERRAIN, type Terrain } from '../../sim/data/map';
+import { formatPercent } from '../hud/format';
 import { BUILD_HOTKEYS } from '../input/keymap';
 import { COLORS } from '../render/palette';
 import type { Session } from '../session';
@@ -67,6 +69,9 @@ export function HelpOverlay({ session }: { session: Session }) {
             <h4>目标</h4>
             <p>
               <b>炉心</b>被摧毁就失败。满足以下任一条件获胜：守满 20 夜；摧毁母巢；修好 K-7 中继站，广播求援直到长明城的车队到达。
+            </p>
+            <p>
+              <b>母巢</b>：地图上每剩一个普通巢穴，母巢受到的伤害降低 {formatPercent(HIVE_SHIELD.reductionPerNest)}，最多降低 {formatPercent(HIVE_SHIELD.maxReduction)}。先清掉普通巢穴，再打母巢。
             </p>
             <h4>一天的节奏</h4>
             <p>

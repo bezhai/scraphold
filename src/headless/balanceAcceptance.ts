@@ -72,9 +72,11 @@ export function balanceChecks(results: readonly AcceptanceResult[]): Check[] {
   if (normal.some(r => r.bot === 'raider')) {
     const n = median(hiveNormal.map(r => r.endDay));
     const h = median(hiveHard.map(r => r.endDay));
-    const early = allHiveNormal.filter(r => r.endDay <= 11).length;
-    checks.push({ name: 'normal hive wins on or before day 11 <=10%', pass: allHiveNormal.length > 0 && early / allHiveNormal.length <= .1, detail: `${early}/${allHiveNormal.length}` });
-    checks.push({ name: 'normal raider hive median day >=13', pass: n >= 13, detail: `${n} (${hiveNormal.length} wins)` });
+    const days = median(allHiveNormal.map(r => r.endDay));
+    checks.push({
+      name: 'normal hive victory median day 11-16 with >=10 wins', pass: allHiveNormal.length >= 10 && days >= 11 && days <= 16,
+      detail: `${days} (${allHiveNormal.length} wins)`,
+    });
     if (results.some(r => r.difficulty === 'hard' && r.bot === 'raider')) checks.push({ name: 'hard raider hive median day >=normal', pass: h >= n, detail: `${h} >= ${n} (${hiveHard.length} wins)` });
   }
   if (STRATEGY_BOTS.every(b => normal.some(r => r.bot === b))) {

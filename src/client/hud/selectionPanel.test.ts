@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DAMAGE_MULTIPLIER, DAMAGE_TYPES, DAMAGE_TYPE_NAMES, PROMOTIONS, SOLDIERS } from '../../sim/data/combat';
+import { DAMAGE_MULTIPLIER, DAMAGE_TYPES, DAMAGE_TYPE_NAMES, HIVE_SHIELD, PROMOTIONS, SOLDIERS } from '../../sim/data/combat';
 import { BUILDINGS } from '../../sim/data/economy';
-import { SIGNAL_STAGE_NAMES, buildingYieldPerDay, onsiteWorkerCount, perDayToPerMinute, veteranThreshold } from '../../sim';
-import { addBuilding, spawnSurvivor } from '../../sim/world/entities';
+import { SIGNAL_STAGE_NAMES, buildingYieldPerDay, createGame, onsiteWorkerCount, perDayToPerMinute, veteranThreshold } from '../../sim';
+import { addBuilding, removeEntity, spawnSurvivor } from '../../sim/world/entities';
 import { buildTestWorld, revealAll } from '../testWorld';
 import { expectMirrors } from './expectMirrors';
 import { selectionPanelModel } from './selectionPanel';
@@ -171,7 +171,25 @@ describe('selectionPanelModel: enemies', () => {
   it('describes a nest with its level', () => {
     const w = buildTestWorld();
     (w.nest as { discovered: boolean }).discovered = true;
-    expect(selectionPanelModel(w.game, [w.nest.id])).toMatchObject({ kind: 'nest', nest: { name: '巢穴', level: 1, isHive: false } });
+    expect(selectionPanelModel(w.game, [w.nest.id])).toMatchObject({
+      kind: 'nest',
+      nest: { name: '巢穴', level: 1, isHive: false, description: '摧毁巢穴可以获得燃料、科研，有时还有幸存者。选中士兵后右键巢穴即可集火。' },
+    });
+  });
+
+  it('explains the hive shield with the ordinary nests left and the current reduction', () => {
+    const game = createGame({ seed: 'sel-hive', origin: 'militia', difficulty: 'normal' });
+    const hive = [...game.state.entities.values()].find((e) => e.kind === 'nest' && e.isHive)!;
+    const pct = (share: number) => `${Math.round(share * 100)}%`;
+    const rule = `地图上每剩一个普通巢穴，母巢受到的伤害降低 ${pct(HIVE_SHIELD.reductionPerNest)}，最多降低 ${pct(HIVE_SHIELD.maxReduction)}。`;
+    const ordinary = [...game.state.entities.values()].filter((e) => e.kind === 'nest' && !e.isHive);
+    for (const e of ordinary.slice(2)) removeEntity(game, e);
+    expect(selectionPanelModel(game, [hive.id])).toMatchObject({
+      kind: 'nest',
+      nest: { name: '母巢', isHive: true, description: `${rule}现在还剩 2 个，减伤 ${pct(2 * HIVE_SHIELD.reductionPerNest)}。` },
+    });
+    for (const e of ordinary.slice(0, 2)) removeEntity(game, e);
+    expect(selectionPanelModel(game, [hive.id])).toMatchObject({ nest: { description: `${rule}普通巢穴已全部摧毁，母巢不再减伤。` } });
   });
 });
 
