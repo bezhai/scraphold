@@ -31,6 +31,7 @@ import {
   PROMOTIONS,
   SOLDIERS,
   SOLDIER_TYPES,
+  trainsSoldiers,
   type ArmorType,
   type MutantType,
   type PromotionId,
@@ -38,7 +39,6 @@ import {
 } from '../../sim/data/combat';
 import { BUILDINGS, RESOURCES, RESOURCE_NAMES, TECHS, type BuildingType, type Resource } from '../../sim/data/economy';
 import { TICKS_PER_SECOND } from '../../sim/time';
-import { trainsSoldiers } from '../input/rightClick';
 import type { BuildingView, EntityView, MutantView, NestView, SoldierView, SurvivorView } from '../view';
 import { availabilityOf, costItems, unavailable, type Availability, type CostItem } from './availability';
 import { formatPercent } from './format';

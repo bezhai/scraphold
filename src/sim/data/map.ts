@@ -45,6 +45,19 @@ export const DIRECTION_NAMES: Record<Direction, string> = {
   NW: '西北',
 };
 
+const DIAGONAL = Math.SQRT1_2;
+/** Unit vector of each compass direction (y grows southward). */
+export const DIRECTION_VECTORS: Record<Direction, { readonly x: number; readonly y: number }> = {
+  N: { x: 0, y: -1 },
+  NE: { x: DIAGONAL, y: -DIAGONAL },
+  E: { x: 1, y: 0 },
+  SE: { x: DIAGONAL, y: DIAGONAL },
+  S: { x: 0, y: 1 },
+  SW: { x: -DIAGONAL, y: DIAGONAL },
+  W: { x: -1, y: 0 },
+  NW: { x: -DIAGONAL, y: -DIAGONAL },
+};
+
 type Range = readonly [min: number, max: number];
 
 export interface ResourcePatchConfig {

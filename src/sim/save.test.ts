@@ -65,6 +65,23 @@ describe('automatic save format', () => {
     expect(restored.state.economy.survivorAi).toEqual({ nextTransferTick: original.state.tick + 77, enemySightings: [{ buildingId: original.state.coreId, tick: original.state.tick - 3 }] });
   });
 
+  it("keeps each soldier's home building and post, so the soldier AI carries on the same way", () => {
+    const original = activeGame();
+    const barracks = [...original.state.entities.values()].find((e) => e.kind === 'building' && e.type === 'barracks')!;
+    if (barracks.kind !== 'building') throw new Error('militia starts with a barracks');
+    barracks.trainQueue.push({ unit: 'rifleman', progress: 0, total: 1, paid: {} });
+    for (let i = 0; i < 30; i++) stepGame(original);
+    const soldiers = (g: typeof original) => [...g.state.entities.values()].flatMap((e) => (e.kind === 'soldier' ? [[e.id, e.homeId, e.attack.post]] : []));
+    expect(soldiers(original).filter(([, home]) => home === barracks.id).length).toBeGreaterThanOrEqual(2);
+    const restored = restoreGame(serializeGame(original))!;
+    expect(soldiers(restored)).toEqual(soldiers(original));
+    for (let i = 0; i < 200; i++) {
+      stepGame(original);
+      stepGame(restored);
+    }
+    expect(hashState(restored)).toBe(hashState(original));
+  });
+
   it('rejects other versions and corrupt saves without throwing', () => {
     const data = JSON.parse(serializeGame(activeGame()));
     data.version = 10;

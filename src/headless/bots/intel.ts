@@ -4,9 +4,9 @@
  * previous nights, the nests it discovered, and that nights grow harder (the data tables).
  * The real night plan in the state is never read.
  */
-import { FORECAST, MUTANTS, MUTANT_TYPES, NIGHTS, type MutantType } from '../../sim/data/combat';
-import { DIRECTIONS, type Direction } from '../../sim/data/map';
-import { nightType, nestNightThreat, edgeNightBudget, type Game, type Point } from '../../sim';
+import { MUTANTS, MUTANT_TYPES, NIGHTS, type MutantType } from '../../sim/data/combat';
+import { DIRECTION_VECTORS, type Direction } from '../../sim/data/map';
+import { expectedThreat, nightType, nestNightThreat, edgeNightBudget, type Game, type Point } from '../../sim';
 import { coreOf, type Snapshot } from './view';
 
 export type Counts = Record<MutantType, number>;
@@ -51,25 +51,6 @@ export interface ThreatEstimate {
   directions: { direction: Direction; weight: number }[];
 }
 
-const SIZE_THREAT = { small: FORECAST.mediumThreat / 2, medium: (FORECAST.mediumThreat + FORECAST.largeThreat) / 2, large: FORECAST.largeThreat * 1.5 };
-
-/** Unit vector of a compass direction (y grows southward). */
-export function directionVector(d: Direction): Point {
-  const k = DIRECTIONS.indexOf(d);
-  const diag = Math.SQRT1_2;
-  const table: Point[] = [
-    { x: 0, y: -1 },
-    { x: diag, y: -diag },
-    { x: 1, y: 0 },
-    { x: diag, y: diag },
-    { x: 0, y: 1 },
-    { x: -diag, y: diag },
-    { x: -1, y: 0 },
-    { x: -diag, y: -diag },
-  ];
-  return table[k] as Point;
-}
-
 function threatOf(counts: Partial<Counts>): number {
   let t = 0;
   for (const m of MUTANT_TYPES) t += (counts[m] ?? 0) * MUTANTS[m].threat;
@@ -97,7 +78,7 @@ export function estimateThreat(game: Game, snap: Snapshot, s: Sightings): Threat
   let preciseBoss = false;
   if (forecast && forecast.night === night && forecast.directionsKnown) {
     for (const g of forecast.groups) {
-      const t = g.counts ? threatOf(g.counts) : SIZE_THREAT[g.size];
+      const t = expectedThreat(g);
       forecastThreat += t;
       directions.push({ direction: g.direction, weight: t });
       if (g.counts) {
@@ -125,7 +106,7 @@ export function rallyPoint(game: Game, est: ThreatEstimate, distanceFromCore: nu
   let vx = 0;
   let vy = 0;
   for (const d of est.directions) {
-    const v = directionVector(d.direction);
+    const v = DIRECTION_VECTORS[d.direction];
     vx += v.x * d.weight;
     vy += v.y * d.weight;
   }

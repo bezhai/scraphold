@@ -3,8 +3,8 @@
  * allowed is the simulation's validateCommand/applyCommand. Mixed selections are split by kind:
  * survivors and soldiers can receive different commands for the same click.
  */
-import { SOLDIERS, SOLDIER_TYPES } from '../../sim/data/combat';
-import { BUILDINGS, type BuildingType } from '../../sim/data/economy';
+import { trainsSoldiers } from '../../sim/data/combat';
+import { BUILDINGS } from '../../sim/data/economy';
 import type { Command, EntityId, GameView } from '../../sim';
 import { isOnMap, type BuildingView, type EntityView } from '../view';
 import type { Selection } from './selection';
@@ -20,10 +20,6 @@ export interface RightClickTarget {
 export interface RightClickModifiers {
   /** Ctrl held: forced move, ignore enemies and buildings. */
   forceMove: boolean;
-}
-
-export function trainsSoldiers(type: BuildingType): boolean {
-  return SOLDIER_TYPES.some((t) => SOLDIERS[t].trainedAt === type);
 }
 
 /**

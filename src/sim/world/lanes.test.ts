@@ -24,8 +24,15 @@ describe('moving through 1-tile lanes between buildings', () => {
     const units = Array.from({ length: 6 }, (_, k) => spawnSoldier(game, 'rifleman', 1 + (k % 2) * 0.8, 1 + Math.floor(k / 2) * 0.8));
     expect(applyCommand(game, { type: 'move', unitIds: units.map((u) => u.id), x: 22.5, y: 22.5 }).ok).toBe(true);
     const goals = units.map((u) => ({ ...u.motion.goal! }));
-    for (let t = 0; t < 1200; t++) stepGame(game);
-    const short = units.filter((u, i) => Math.hypot(u.x - goals[i]!.x, u.y - goals[i]!.y) > 1).map((u) => [u.id, +u.x.toFixed(2), +u.y.toFixed(2)]);
+    // Arrived units go back under automatic control and walk on to their posts, so arrival is recorded as it happens.
+    const arrived = new Set<number>();
+    for (let t = 0; t < 1200; t++) {
+      stepGame(game);
+      units.forEach((u, i) => {
+        if (Math.hypot(u.x - goals[i]!.x, u.y - goals[i]!.y) <= 1) arrived.add(u.id);
+      });
+    }
+    const short = units.filter((u) => !arrived.has(u.id)).map((u) => [u.id, +u.x.toFixed(2), +u.y.toFixed(2)]);
     expect(short).toEqual([]);
   });
 

@@ -1,10 +1,12 @@
 /**
  * Navigation grid derived from the state: which tiles are blocked, which structure occupies each
- * tile, which open tiles connect, and the shared flow field toward the core. Owner: Task 1.
+ * tile, which open tiles connect, the shared flow field toward the core, and which tiles belong to
+ * the base area the soldier AI defends. Owner: Task 1.
  *
  * Derived data (not hashed). It is rebuilt lazily by ensureNav whenever state.navVersion changes,
  * i.e. after any structure is added or removed (world/entities.ts bumps the version).
  */
+import { SOLDIER_AI } from '../data/combat';
 import type { Game } from '../game';
 import { NEIGHBORS_4, PASSABLE_BY_CODE, forEachFootprintTile } from '../map/grid';
 import type { GameState } from '../state';
@@ -32,6 +34,8 @@ export interface NavGrid {
    */
   flowCost: Int32Array;
   flowNext: Int32Array;
+  /** 1 where the tile center lies within SOLDIER_AI.baseMargin of a player building's footprint (combat/soldierAi.ts). */
+  baseArea: Uint8Array;
   targetFlow: { id: number; version: number; cost: Int32Array; next: Int32Array } | null;
 }
 
@@ -47,6 +51,7 @@ export function createNavGrid(width: number, height: number): NavGrid {
     region: new Int32Array(n),
     flowCost: new Int32Array(n),
     flowNext: new Int32Array(n),
+    baseArea: new Uint8Array(n),
     targetFlow: null,
   };
 }
@@ -57,6 +62,7 @@ export function rebuildNav(nav: NavGrid, state: GameState): void {
     nav.tileClass[i] = PASSABLE_BY_CODE[terrain[i] as number] ? TILE_OPEN : TILE_TERRAIN;
     nav.structureAt[i] = 0;
   }
+  nav.baseArea.fill(0);
   for (const e of state.entities.values()) {
     if (e.kind !== 'building' && e.kind !== 'nest') continue;
     const cls = e.kind === 'nest' ? TILE_NEST : e.id === state.coreId ? TILE_CORE : TILE_BUILDING;
@@ -64,11 +70,24 @@ export function rebuildNav(nav: NavGrid, state: GameState): void {
       nav.tileClass[i] = cls;
       nav.structureAt[i] = e.id;
     });
+    if (e.kind === 'building') markBaseArea(nav, e.tileX, e.tileY, e.size);
   }
   for (let i = 0; i < terrain.length; i++) nav.blocked[i] = nav.tileClass[i] === TILE_OPEN ? 0 : 1;
   labelRegions(nav);
   computeFlowField(nav);
   nav.version = state.navVersion;
+}
+
+function markBaseArea(nav: NavGrid, tx: number, ty: number, size: number): void {
+  const m = SOLDIER_AI.baseMargin;
+  const reach = Math.ceil(m);
+  for (let y = Math.max(0, ty - reach); y < Math.min(nav.height, ty + size + reach); y++) {
+    const dy = Math.max(0, ty - (y + 0.5), y + 0.5 - (ty + size));
+    for (let x = Math.max(0, tx - reach); x < Math.min(nav.width, tx + size + reach); x++) {
+      const dx = Math.max(0, tx - (x + 0.5), x + 0.5 - (tx + size));
+      if (dx * dx + dy * dy <= m * m) nav.baseArea[y * nav.width + x] = 1;
+    }
+  }
 }
 
 /** Flood-fills `region`. A* steps diagonally only where both orthogonal tiles are open, so 4-neighbour connectivity is exactly what a path can reach. */

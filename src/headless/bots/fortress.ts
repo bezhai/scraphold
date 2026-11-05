@@ -14,8 +14,8 @@
  */
 import { validateCommand, nightType, type Game } from '../../sim';
 import { BUILDINGS, type BuildingType } from '../../sim/data/economy';
+import { DIRECTION_VECTORS } from '../../sim/data/map';
 import { inBounds, terrainAt } from '../../sim/map/grid';
-import { directionVector } from './intel';
 import { preparationThreat, composeArmy, knowsOil, needsHousing, threatShares } from './common';
 import { findSite, type Site, type SiteRules } from './sites';
 import type { BuildOrder, Context, Strategy } from './strategy';
@@ -115,7 +115,7 @@ export function fortress({ ringGap }: FortressOptions = { ringGap: 3 }): Strateg
     const { game } = ctx;
     const core = ctx.core;
     const rally = ctx.memory.rally;
-    const dir = rally ? { x: rally.x - core.x, y: rally.y - core.y } : directionVector('N');
+    const dir = rally ? { x: rally.x - core.x, y: rally.y - core.y } : DIRECTION_VECTORS.N;
     const occupied = new Set<number>();
     for (const b of ctx.snap.buildings) occupied.add(b.tileY * game.state.map.width + b.tileX);
     const free = layoutOf(game).ring.filter((t) => !occupied.has(t.tileY * game.state.map.width + t.tileX));

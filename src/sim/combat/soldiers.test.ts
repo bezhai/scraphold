@@ -8,7 +8,7 @@ import { stepGame } from '../pipeline';
 import type { Mutant, Nest, Soldier } from '../state';
 import { FOG_VISIBLE } from '../state';
 import { createTestGame } from '../testing';
-import { spawnMutant, spawnSoldier, spawnSurvivor } from '../world/entities';
+import { spawnMutant, spawnSoldier } from '../world/entities';
 import { soldierSystem } from './soldiers';
 import { veteranThreshold } from './damage';
 
@@ -118,102 +118,19 @@ describe('soldier orders', () => {
     expect(dist(s, { x: 1.5, y: 3.5 })).toBeLessThan(0.05);
   });
 
-  it('idle soldiers engage enemies close to their spot and walk back afterwards', () => {
-    const game = createTestGame(ROWS);
-    const s = spawnSoldier(game, 'shieldGuard', 5.5, 3.5);
-    run(game, 5);
-    const m = dummy(game, 'runner', 7.8, 3.5);
-    let maxAway = 0;
-    run(game, 200, () => {
-      maxAway = Math.max(maxAway, dist(s, { x: 5.5, y: 3.5 }));
-      return !game.state.entities.has(m.id);
-    });
-    expect(game.state.entities.has(m.id)).toBe(false);
-    expect(maxAway).toBeGreaterThan(1);
-    run(game, 120);
-    expect(dist(s, { x: 5.5, y: 3.5 })).toBeLessThan(0.3);
-    expect(s.order).toEqual({ type: 'idle' });
-  });
-
-  it('idle soldiers walk back when the enemy they chase is killed by someone else', () => {
-    const game = createTestGame(ROWS);
-    const s = spawnSoldier(game, 'shieldGuard', 5.5, 3.5);
-    run(game, 5);
-    const m = dummy(game, 'runner', 8.3, 3.5);
-    run(game, 100, () => s.motion.mode === 'path' && dist(s, { x: 5.5, y: 3.5 }) > 0.5);
-    expect(s.motion.mode).toBe('path');
-    m.hp = 0;
-    run(game, 120);
-    expect(dist(s, { x: 5.5, y: 3.5 })).toBeLessThan(0.3);
-  });
-
-  it('idle soldiers do not chase enemies far from their spot', () => {
-    const game = createTestGame(ROWS);
-    const s = spawnSoldier(game, 'shieldGuard', 5.5, 3.5);
-    const m = dummy(game, 'runner', 12.5, 3.5);
-    run(game, 100);
-    expect(dist(s, { x: 5.5, y: 3.5 })).toBeLessThan(0.3);
-    expect(m.hp).toBe(MUTANTS.runner.hp);
-  });
-
-  it('idle soldiers answer a mutant hitting the core within their leash, even beyond their acquire radius', () => {
+  it('idle soldiers answer a mutant hitting the core in the base area, even beyond their acquire radius', () => {
     const game = createTestGame(ROWS);
     const coreId = game.state.coreId;
     // The boss smashes buildings first and ignores the guard; the core's west edge is x = 27.
     const boss = spawnMutant(game, 'behemoth', 26.1, 9.5, { mode: 'assault' });
     const s = spawnSoldier(game, 'shieldGuard', 21.5, 9.5);
-    // Gap 4.6 - 0.34 - 0.8 = 3.46: beyond the acquire radius (0.45 + 2.5), inside vision (6) and the leash.
+    // Gap 4.6 - 0.34 - 0.8 = 3.46: beyond the acquire radius (0.45 + 2.5), inside vision (6) and the response radius.
     run(game, 8);
     expect(boss.attack.targetId).toBe(coreId);
     run(game, 12);
     expect(s.attack.targetId).toBe(boss.id);
     run(game, 40);
     expect(gapBetweenUnits(s, boss)).toBeLessThan(1);
-  });
-
-  it('idle riflemen answer a visible mutant attacking a survivor beyond their acquire radius', () => {
-    const game = createTestGame(ROWS);
-    const survivor = spawnSurvivor(game, 18.5, 3.5);
-    const m = spawnMutant(game, 'wanderer', 17.7, 3.5, { mode: 'assault' });
-    // Gap 8.2 - 0.3 - 0.32 = 7.58: beyond the rifleman's acquire radius (vision 7), inside its leash (5 + 6.5).
-    const s = spawnSoldier(game, 'rifleman', 9.5, 3.5);
-    run(game, 8);
-    expect(m.attack.targetId).toBe(survivor.id);
-    run(game, 12);
-    expect(s.attack.targetId).toBe(m.id);
-  });
-
-  it('idle soldiers keep their spot while another soldier fights beyond their acquire radius', () => {
-    const game = createTestGame(ROWS);
-    const front = spawnSoldier(game, 'shieldGuard', 18.5, 3.5);
-    const m = spawnMutant(game, 'wanderer', 19.2, 3.5, { mode: 'assault' });
-    const s = spawnSoldier(game, 'rifleman', 9.5, 3.5);
-    run(game, 20);
-    expect(m.attack.targetId).toBe(front.id);
-    expect(s.attack.targetId).toBe(0);
-    expect(dist(s, { x: 9.5, y: 3.5 })).toBeLessThan(0.3);
-  });
-
-  it('idle soldiers leave a mutant hitting the core alone when it is beyond their leash', () => {
-    const game = createTestGame(ROWS);
-    const boss = spawnMutant(game, 'behemoth', 26.1, 9.5, { mode: 'assault' });
-    // A scout sees 11 tiles but only chases within 5 + 4 of its spot: gap 11 - 0.34 - 0.8 = 9.86.
-    const s = spawnSoldier(game, 'scout', 15.1, 9.5);
-    run(game, 40);
-    expect(s.attack.targetId).toBe(0);
-    expect(dist(s, { x: 15.1, y: 9.5 })).toBeLessThan(0.3);
-    expect(boss.attack.targetId).toBe(game.state.coreId);
-  });
-
-  it('a stop while walking back makes the current spot the new guard spot', () => {
-    const game = createTestGame(ROWS);
-    const s = spawnSoldier(game, 'shieldGuard', 5.5, 3.5);
-    run(game, 5);
-    applyCommand(game, { type: 'move', unitIds: [s.id], x: 12.5, y: 3.5 });
-    run(game, 400, () => s.order.type === 'idle');
-    applyCommand(game, { type: 'stop', unitIds: [s.id] });
-    run(game, 60);
-    expect(dist(s, { x: 12.5, y: 3.5 })).toBeLessThan(0.3);
   });
 
   it('picks the target its weapon hurts most: snipers shoot crawlers before wanderers', () => {

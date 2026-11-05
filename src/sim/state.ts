@@ -168,7 +168,12 @@ export interface Soldier extends EntityBase {
   motion: Motion;
   order: SoldierOrder;
   control: UnitControl;
-  /** Initial rally destination; cleared on arrival or a new player order. */
+  /**
+   * The training building whose day post this soldier takes under automatic control: the one that
+   * trained it, or the one the soldier AI assigned when it had none (0 = none; combat/soldierAi.ts).
+   */
+  homeId: EntityId;
+  /** First walk of a new soldier to its rally point (rallySpeedPct); cleared on arrival, a new post or a player order. */
   deploymentGoal: Point | null;
   attack: AttackState;
   veterancy: Veterancy;

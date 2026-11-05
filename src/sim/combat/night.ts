@@ -118,6 +118,20 @@ function sizeOf(threat: number): ForecastSize {
   return threat >= FORECAST.mediumThreat ? 'medium' : 'small';
 }
 
+const TYPICAL_THREAT: Record<ForecastSize, number> = {
+  small: FORECAST.mediumThreat / 2,
+  medium: (FORECAST.mediumThreat + FORECAST.largeThreat) / 2,
+  large: FORECAST.largeThreat * 1.5,
+};
+
+/** What a player can expect from one forecast direction: its exact threat when the counts are shown, else a typical threat for its size. */
+export function expectedThreat(g: ForecastGroup): number {
+  if (!g.counts) return TYPICAL_THREAT[g.size];
+  let threat = 0;
+  for (const t of MUTANT_TYPES) threat += (g.counts[t] ?? 0) * MUTANTS[t].threat;
+  return threat;
+}
+
 /** The plan as the player sees it: per direction, exact only when precise. */
 export function forecastFor(plan: NightPlan, precise: boolean, type: NightType): NightForecast {
   if (type === 'denseFog') return { night: plan.night, directionsKnown: false, precise: false, groups: [] };

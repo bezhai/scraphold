@@ -59,8 +59,10 @@ describe('unit control', () => {
     steps(game, 10);
     expect(rifle.control).toBe('player');
     expect(survivor.control).toBe('player');
-    expect(stepUntil(game, () => rifle.control === 'auto' && survivor.control === 'auto')).toBe(true);
+    // Each stands at its destination when handed back (then the managers may send it on).
+    expect(stepUntil(game, () => rifle.control === 'auto')).toBe(true);
     expect(rifle.motion.mode).toBe('stand');
+    expect(stepUntil(game, () => survivor.control === 'auto')).toBe(true);
     expect(survivor.motion.mode).toBe('stand');
   });
 

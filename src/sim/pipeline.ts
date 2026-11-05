@@ -12,6 +12,7 @@ import { mutantAiSystem } from './combat/mutants';
 import { nestSystem } from './combat/nests';
 import { nightSystem } from './combat/night';
 import { outcomeSystem } from './combat/outcome';
+import { soldierAiSystem } from './combat/soldierAi';
 import { soldierSystem } from './combat/soldiers';
 import { constructionSystem } from './economy/construction';
 import { explorationSystem } from './economy/exploration';
@@ -51,6 +52,8 @@ export const PIPELINE: readonly PipelineStage[] = [
   { name: 'night', owner: 'task3', run: nightSystem },
   { name: 'nests', owner: 'task3', run: nestSystem },
   { name: 'mutantAi', owner: 'task3', run: mutantAiSystem },
+  /** Posts for soldiers under automatic control. */
+  { name: 'soldierAi', owner: 'task3', run: soldierAiSystem },
   { name: 'soldiers', owner: 'task3', run: soldierSystem },
   /** Units whose player order has ended return to automatic control. */
   { name: 'control', owner: 'task2', run: controlSystem },

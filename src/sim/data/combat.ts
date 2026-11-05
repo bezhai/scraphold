@@ -231,6 +231,11 @@ export const SOLDIERS: Record<SoldierType, SoldierDef> = {
   },
 };
 
+/** Buildings that train soldiers; they take a rally point, the day post of the soldiers they train. */
+export function trainsSoldiers(type: BuildingType): boolean {
+  return SOLDIER_TYPES.some((t) => SOLDIERS[t].trainedAt === type);
+}
+
 /** Veterancy promotions: per-unit stat modifiers (same stat names as unit Effects). */
 export interface PromotionDef {
   name: string;
@@ -514,8 +519,6 @@ export const ALERT_THROTTLE_SECONDS = 4;
 export const ENGAGEMENT = {
   /** Soldiers notice enemies within min(vision, range + this), and never less than their range. */
   soldierAcquireExtra: 2.5,
-  /** Idle soldiers only chase enemies within this distance of their guard spot, then walk back. */
-  idleLeash: 5,
   /** Assaulting mutants give up a chased unit farther than vision + this. */
   mutantChaseLeash: 3,
   /** Nest guards engage player units within guardRadius + this of their nest... */
@@ -524,6 +527,24 @@ export const ENGAGEMENT = {
   guardLeashExtra: 7,
   /** A retreating mutant this close to its nest is absorbed into it. */
   retreatMergeDistance: 1.2,
+};
+
+/** The soldier AI (combat/soldierAi.ts): soldiers under automatic control defend the base. */
+export const SOLDIER_AI = {
+  /** Ticks between two decisions about where each soldier stands; decisions fall halfway between its multiples. */
+  intervalTicks: 10,
+  /** The base area: tiles whose center lies within this distance of a player building's footprint. */
+  baseMargin: 6,
+  /** Soldiers go for visible mutants in the base area up to this far from their post. */
+  responseRadius: 12,
+  /** Night posts stand this far from the core center toward their forecast direction (inside the base area of the core alone). */
+  postDistance: 7,
+  /** A forecast direction gets its own squad only when its share of the soldiers is at least this many. */
+  minSquad: 3,
+  /** Below this share of max hp a soldier goes to the core and stays there (nothing heals soldiers). */
+  retreatBelowPct: 0.3,
+  /** A soldier is sent to a new post only when it moved farther than this from the old one (formation shifts stay put). */
+  repostSlack: 1.2,
 };
 
 // ---------------------------------------------------------------------------------------------

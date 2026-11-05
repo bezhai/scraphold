@@ -1,7 +1,9 @@
 /**
  * Construction sites and training queues: placing (cost, unlock, limits, then
  * world/placement.ts checkPlacement), build progress, cancel/demolish refunds, training that
- * consumes a survivor and food/scrap/fuel, spawning the soldier and sending it to the rally point.
+ * consumes a survivor and food/scrap/fuel, spawning the soldier beside the building (toward its
+ * rally point). The soldier belongs to the building (Soldier.homeId): by day the soldier AI keeps it
+ * at the rally point, or beside the building without one (combat/soldierAi.ts).
  * Building stats (max hp from hpPct, vision once finished) are kept current here too.
  * Owner: Task 2.
  *
@@ -19,14 +21,13 @@ import { SIGNAL_TEXT } from '../data/signal';
 import { signalMessage } from '../signal/signal';
 import { isRemote } from '../world/remote';
 import { OK, reject, type CommandHandler, type CommandResult } from '../commands';
-import { SOLDIERS, SOLDIER_TYPES, type SoldierType } from '../data/combat';
+import { SOLDIERS, trainsSoldiers, type SoldierType } from '../data/combat';
 import { BUILDINGS, CONSTRUCTION, TRAINING, type BuildingType } from '../data/economy';
 import { emit } from '../events';
 import type { Game } from '../game';
 import type { Building, Survivor } from '../state';
 import { secondsToTicks } from '../time';
 import { addBuilding, removeEntity, spawnSoldier, spawnSurvivor } from '../world/entities';
-import { moveUnitTo } from '../world/movement';
 import { checkPlacement } from '../world/placement';
 import { buildingById, pointBeside } from './buildings';
 import { idleTask } from './model';
@@ -60,10 +61,6 @@ export function refreshBuildingStats(game: Game, b: Building): void {
   if (b.construction === null) b.vision = Math.max(0, def.vision + game.modifiers.building[b.type].visionAdd);
 }
 
-function isMilitary(type: BuildingType): boolean {
-  return SOLDIER_TYPES.some((s) => SOLDIERS[s].trainedAt === type);
-}
-
 function returnRecruit(game: Game, b: Building): void {
   const at = pointBeside(game, b);
   spawnSurvivor(game, at.x, at.y);
@@ -94,11 +91,9 @@ function advanceSite(game: Game, b: Building, helpers: number): void {
 function finishTraining(game: Game, b: Building, unit: SoldierType): void {
   const at = pointBeside(game, b, b.rally?.x, b.rally?.y);
   const soldier = spawnSoldier(game, unit, at.x, at.y);
-  if (b.rally) {
-    soldier.deploymentGoal = { ...b.rally };
-    soldier.order = { type: 'attackMove', x: b.rally.x, y: b.rally.y };
-    moveUnitTo(game, soldier, b.rally.x, b.rally.y);
-  }
+  // The soldier AI walks it to this building's day post (combat/soldierAi.ts); the rally speed bonus lasts for that first walk.
+  soldier.homeId = b.id;
+  if (b.rally) soldier.deploymentGoal = { ...b.rally };
   game.state.stats.soldiersTrained[unit]++;
   emit(game, { type: 'unitTrained', unitId: soldier.id, unit, buildingId: b.id });
 }
@@ -184,7 +179,7 @@ export const trainHandler: CommandHandler<'train'> = {
   validate(game, cmd) {
     const b = buildingById(game, cmd.buildingId);
     if (!b) return reject('unknownTarget');
-    if (!isMilitary(b.type)) return reject('notMilitary');
+    if (!trainsSoldiers(b.type)) return reject('notMilitary');
     if (SOLDIERS[cmd.unit].trainedAt !== b.type) return reject('notTrainable');
     if (b.construction) return reject('underConstruction');
     if (!game.modifiers.unlockedUnits.has(cmd.unit)) return reject('locked');

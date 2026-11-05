@@ -5,6 +5,7 @@ import { applyCommand, validateCommand } from '../commandHandlers';
 import { drainEvents } from '../events';
 import { refreshModifiers, type Game } from '../game';
 import type { Building, Soldier, Survivor } from '../state';
+import { stepGame } from '../pipeline';
 import { createTestGame } from '../testing';
 import { secondsToTicks } from '../time';
 import { addBuilding, enterBuilding, spawnSurvivor } from '../world/entities';
@@ -267,15 +268,15 @@ describe('training', () => {
     expect(drainEvents(game)).toContainEqual({ type: 'unitTrained', unitId: soldier!.id, unit: 'rifleman', buildingId: barracks.id });
   });
 
-  it('sends trained soldiers to the rally point with attack-move', () => {
+  it('trained soldiers belong to the barracks and, under automatic control, go to wait at its rally point', () => {
     const { game, barracks } = barracksGame(1);
-    applyCommand(game, { type: 'setRally', buildingId: barracks.id, x: 10.5, y: 1.5 });
+    applyCommand(game, { type: 'setRally', buildingId: barracks.id, x: 12.5, y: 1.5 });
     applyCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' });
     run(game, secondsToTicks(SOLDIERS.scout.trainSeconds));
     const [soldier] = entitiesOf(game, 'soldier');
-    expect(soldier?.order).toEqual({ type: 'attackMove', x: 10.5, y: 1.5 });
-    expect(soldier?.motion.mode).toBe('path');
-    expect(soldier?.x).toBeGreaterThan(1.5);
+    expect(soldier).toMatchObject({ homeId: barracks.id, control: 'auto', order: { type: 'idle' } });
+    for (let t = 0; t < secondsToTicks(5); t++) stepGame(game);
+    expect(Math.hypot(soldier!.x - 12.5, soldier!.y - 1.5)).toBeLessThan(0.5);
   });
 
   it('trains faster with trainSpeedPct', () => {

@@ -8,7 +8,7 @@
  * its panel buttons and the bots name workers); a move or a stop takes them out first.
  */
 import { OK, reject, type CommandHandler } from '../commands';
-import { SOLDIERS, SOLDIER_TYPES } from '../data/combat';
+import { trainsSoldiers } from '../data/combat';
 import { idleTask } from '../economy/model';
 import type { Game } from '../game';
 import { isIsolated } from '../incidents/model';
@@ -189,7 +189,7 @@ export const setRallyHandler: CommandHandler<'setRally'> = {
   validate(game, cmd) {
     const b = game.state.entities.get(cmd.buildingId);
     if (!b || b.kind !== 'building') return reject('unknownTarget');
-    if (!SOLDIER_TYPES.some((s) => SOLDIERS[s].trainedAt === b.type)) return reject('notMilitary');
+    if (!trainsSoldiers(b.type)) return reject('notMilitary');
     if (!inMap(game, cmd.x, cmd.y)) return reject('outOfBounds');
     return OK;
   },

@@ -12,21 +12,23 @@
  *   becomes idle there.
  * - attackTarget: only the focus target, chased until it dies; then idle.
  * - hold: never moves; fires at the best target in range.
- * - idle: engages mutants within the acquire radius that are in range or close to its guard spot,
- *   walks back to the spot when the fight ends. Standing still makes the current place the spot.
- *   A mutant that is attacking the base (the core, any building, a survivor) is answered from
- *   farther away: anywhere close to the guard spot, as long as the player can see it. So soldiers
- *   never stand by while the base is hit within their reach. Fights with other soldiers do not
- *   pull them away (those soldiers fight back; chasing every skirmish broke up formations).
+ * - idle (the soldier is under automatic control; soldierAi.ts gives it a post and walks it there):
+ *   fights visible mutants only, those within its weapon range and those inside the base area up to
+ *   SOLDIER_AI.responseRadius from its post, so it meets intruders but never chases one out of the
+ *   base; nests and the hive are never its targets. Mutants are looked for within the acquire
+ *   radius every tick and farther out every RESCAN_TICKS (staggered). When a fight ends it walks
+ *   back to its post. A wounded soldier (soldierAi.ts sends it to the core) never stops or turns to
+ *   fight; like every soldier not on a forced move it still fires at what comes in range (attacks.ts).
  * Acquire radius: min(vision, range + ENGAGEMENT.soldierAcquireExtra), at least the range.
  */
-import { ENGAGEMENT, SOLDIERS } from '../data/combat';
+import { ENGAGEMENT, SOLDIERS, SOLDIER_AI } from '../data/combat';
 import type { Game } from '../game';
 import { tileAtPoint } from '../map/grid';
 import { FOG_VISIBLE, type Entity, type Point, type Soldier } from '../state';
 import { moveUnitTo, stopUnit } from '../world/movement';
 import { edgeDistance } from '../world/spatial';
 import { checkVeterancy } from './damage';
+import { inBaseArea, isWounded } from './soldierAi';
 import { canHit, chooseTarget, liveEntity } from './targeting';
 import { gapBetween, soldierStat, soldierWeapon, type WeaponProfile } from './weapons';
 
@@ -38,7 +40,7 @@ const CHASE_REPATH_TICKS = 10;
 const CHASE_GOAL_SLACK = 1;
 /** An attack-move ends when the soldier stands this close to its destination. */
 const DESTINATION_SLACK = 1.5;
-/** An idle soldier farther than this from its guard spot after a fight walks back. */
+/** An idle soldier farther than this from its post after a fight walks back. */
 const GUARD_SLACK = 0.4;
 /** A kept target may drift this much beyond the acquire radius before it is dropped. */
 const KEEP_SLACK = 1;
@@ -46,7 +48,7 @@ const KEEP_SLACK = 1;
 /** Max hp, speed and vision from the type's tech modifiers, the promotion and hunger. */
 export function refreshSoldierStats(game: Game, s: Soldier): void {
   const dx = s.x - (s.deploymentGoal?.x ?? s.x); const dy = s.y - (s.deploymentGoal?.y ?? s.y);
-  if (s.deploymentGoal && (s.order.type !== 'attackMove' || dx * dx + dy * dy <= DESTINATION_SLACK * DESTINATION_SLACK)) s.deploymentGoal = null;
+  if (s.deploymentGoal && dx * dx + dy * dy <= DESTINATION_SLACK * DESTINATION_SLACK) s.deploymentGoal = null;
   const def = SOLDIERS[s.type];
   const maxHp = def.hp * Math.max(0.1, 1 + soldierStat(game, s, 'hpPct'));
   if (maxHp !== s.maxHp) {
@@ -168,62 +170,45 @@ function attackMove(game: Game, s: Soldier, w: WeaponProfile, orderX: number, or
   else walkTo(game, s, post);
 }
 
-/** The mutant is hitting the base right now: a building (the core included) or a survivor. */
-function attacksBase(game: Game, e: Entity): boolean {
-  if (e.kind !== 'mutant') return false;
-  const victim = liveEntity(game, e.attack.targetId);
-  return victim !== null && (victim.kind === 'building' || victim.kind === 'survivor');
+function visible(game: Game, e: Entity): boolean {
+  const { fog, map } = game.state;
+  return fog[tileAtPoint(map, e.x, e.y)] === FOG_VISIBLE;
 }
 
 /**
- * For an idle soldier with nothing in its acquire radius: a visible mutant attacking the base
- * that passes `nearSpot`. The current target is kept while it still qualifies; a new one is looked
- * for every RESCAN_TICKS (staggered) within `reach` of the soldier.
+ * The mutant a healthy idle soldier fights (see the header): the best one within its acquire
+ * radius, else the one it is after, else (on a rescan) the best one anywhere within reach of its post.
  */
-function attackerToAnswer(game: Game, s: Soldier, w: WeaponProfile, nearSpot: (e: Entity) => boolean, reach: number): Entity | null {
-  const { fog, map } = game.state;
-  const visible = (e: Entity) => fog[tileAtPoint(map, e.x, e.y)] === FOG_VISIBLE;
-  const answers = (e: Entity) => attacksBase(game, e) && nearSpot(e) && visible(e);
+function intruder(game: Game, s: Soldier, w: WeaponProfile, post: Point): Entity | null {
+  const reach = SOLDIER_AI.responseRadius;
+  const accept = (e: Entity) =>
+    e.kind === 'mutant' && visible(game, e) && (gapBetween(s, e) <= w.range || (edgeDistance(e, post.x, post.y) <= reach && inBaseArea(game, e.x, e.y)));
+  const near = engagement(game, s, w, acquireRadius(s, w), accept);
+  if (near) return near;
   const kept = liveEntity(game, s.attack.targetId);
-  if (kept && answers(kept)) return kept;
-  return rescanDue(game, s) ? chooseTarget(game, s, w, reach, answers) : null;
+  if (kept && accept(kept)) return kept;
+  return rescanDue(game, s) ? chooseTarget(game, s, w, reach + distance(s, post), accept) : null;
 }
 
-function guard(game: Game, s: Soldier, w: WeaponProfile): void {
+function defend(game: Game, s: Soldier, w: WeaponProfile): void {
   let post = s.attack.post;
-  if (!post || post.kind !== 'guard') {
-    // Newly idle: guard where the soldier is headed (e.g. a rally point) or where it stands.
-    const g = s.motion.mode === 'path' && s.motion.goal ? s.motion.goal : s;
-    post = s.attack.post = { kind: 'guard', x: g.x, y: g.y };
+  if (!post || post.kind !== 'guard') post = s.attack.post = { kind: 'guard', x: s.x, y: s.y };
+  if (isWounded(s)) {
+    // On its way to the core or there: it never stops or turns to fight (attacks.ts still fires at what is in range).
+    s.attack.targetId = 0;
+    return;
   }
-  const spot = post;
-  const leash = ENGAGEMENT.idleLeash + w.range;
-  const nearSpot = (e: Entity) => gapBetween(s, e) <= w.range || edgeDistance(e, spot.x, spot.y) - s.radius <= leash;
-  const accept = (e: Entity) => e.kind === 'mutant' && nearSpot(e);
   const fought = s.attack.targetId !== 0;
-  const t = engagement(game, s, w, acquireRadius(s, w), accept) ?? attackerToAnswer(game, s, w, nearSpot, leash + distance(s, spot));
+  const t = intruder(game, s, w, post);
   if (t) {
     fightOrChase(game, s, w, t);
     return;
   }
   s.attack.targetId = 0;
-  if (fought) {
-    // The fight just ended (target dead or out of reach): back to the spot.
-    if (distance(s, spot) > GUARD_SLACK) walkTo(game, s, spot);
-    else if (s.motion.mode !== 'stand') stopUnit(s);
-    return;
-  }
-  if (s.motion.mode === 'path') {
-    // Walking back, or sent somewhere without an order (e.g. a rally point): guard the goal.
-    if (s.motion.goal && !walkingTo(s, spot)) {
-      spot.x = s.motion.goal.x;
-      spot.y = s.motion.goal.y;
-    }
-    return;
-  }
-  // Standing with nothing to fight: wherever it stands (stopped, pushed) is the spot now.
-  spot.x = s.x;
-  spot.y = s.y;
+  if (!fought) return;
+  // The fight just ended (target dead or out of reach): back to the post.
+  if (distance(s, post) > GUARD_SLACK) moveUnitTo(game, s, post.x, post.y);
+  else if (s.motion.mode !== 'stand') stopUnit(s);
 }
 
 function decide(game: Game, s: Soldier): void {
@@ -241,7 +226,7 @@ function decide(game: Game, s: Soldier): void {
     case 'attackMove':
       return attackMove(game, s, soldierWeapon(game, s), order.x, order.y);
     case 'idle':
-      return guard(game, s, soldierWeapon(game, s));
+      return defend(game, s, soldierWeapon(game, s));
   }
 }
 

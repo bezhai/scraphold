@@ -69,6 +69,7 @@ export function spawnSoldier(game: Game, type: SoldierType, x: number, y: number
     motion: createMotion(def.speed, def.mass),
     order: { type: 'idle' },
     control: 'auto',
+    homeId: 0,
     deploymentGoal: null,
     attack: createAttackState(),
     veterancy: createVeterancy(),

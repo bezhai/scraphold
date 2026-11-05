@@ -44,7 +44,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 | `sim/world/*` | 实体工厂和移除、空间索引、移动、迷雾、放置几何检查、单位指令、开局、时钟系统、清理系统 | 任务 1 / 主会话 |
 | `sim/testing.ts` | 手画地图建测试局 `createTestGame` | 任务 1 / 主会话 |
 | `sim/economy/*`（`model.ts`、`workers.ts`、`construction.ts`、`production.ts`、`population.ts`、`exploration.ts`、`tech.ts`、`policies.ts`）和 `sim/data/economy.ts` | 经济与发展的状态子结构、系统、指令处理器、数据表 | 任务 2 |
-| `sim/combat/*`（`model.ts`、`night.ts`、`nightBudget.ts`、`nests.ts`、`mutants.ts`、`soldiers.ts`、`attacks.ts`、`outcome.ts`）和 `sim/data/combat.ts` | 战斗与夜晚的状态子结构、系统、指令处理器、数据表 | 任务 3 |
+| `sim/combat/*`（`model.ts`、`night.ts`、`nightBudget.ts`、`nests.ts`、`mutants.ts`、`soldiers.ts`、`soldierAi.ts`、`attacks.ts`、`outcome.ts`）和 `sim/data/combat.ts` | 战斗与夜晚的状态子结构、系统、指令处理器、数据表 | 任务 3 |
 | `src/client/**`、`index.html`、`e2e/**`、`playwright.config.ts` | 浏览器客户端 | 任务 4 |
 | `src/headless/run.ts`、`cli.ts` | 无头运行器 | 任务 1；任务 5 只加新文件 |
 | `src/headless/bots/*`、`balance.ts`、`balanceGame.ts`、`trace.ts`、`economyCheck.ts` | 机器人（经济优先、清巢、工事、信号塔、什么都不做）和平衡跑局脚本。机器人只用公开 API，只针对已发现的巢穴和当前可见的怪物 | 任务 5 |
@@ -159,7 +159,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 ### 自动存档
 
 - `serializeGame(game: Pick<Game, 'state'>): string` 返回 JSON 字符串；`restoreGame(text: string): Game | null` 恢复整局。调用者负责 localStorage/IndexedDB、存储键和写入时机。
-- 格式是 `{version: SAVE_VERSION, hash, state}`，当前 `SAVE_VERSION = 13`（第三版给幸存者和士兵加了控制归属 `control`、给经济状态加了幸存者 AI 的 `survivorAi`，不兼容旧局；拒绝所有旧版存档）。状态里的 `entities` 按创建顺序编码为条目数组，`terrain/fog` 编码为数值数组；JSON 无法保留的负零使用保留标记 `{$number:'-0'}`。所有其他状态字段直接保留，不筛选动态 payload。
+- 格式是 `{version: SAVE_VERSION, hash, state}`，当前 `SAVE_VERSION = 13`（第三版给幸存者和士兵加了控制归属 `control`、给经济状态加了幸存者 AI 的 `survivorAi`、给士兵加了所属训练建筑 `homeId`，不兼容旧局；拒绝所有旧版存档）。状态里的 `entities` 按创建顺序编码为条目数组，`terrain/fog` 编码为数值数组；JSON 无法保留的负零使用保留标记 `{$number:'-0'}`。所有其他状态字段直接保留，不筛选动态 payload。
 - 版本不匹配、JSON 损坏、数组非法或状态哈希不匹配时返回 null，不迁移、不部分恢复。状态结构或规则发生不兼容变更时提升格式版本。
 - 恢复不调用 `createGame`、不消耗 RNG、不重新揭开迷雾；重建完整日历缓存、导航/流场、空间索引、修正汇总，事件输出队列为空。恢复后的状态哈希必须完全一致，随后同指令继续推进的哈希和输出事件也必须一致。
 - 本任务仅提供模拟层存档；“继续游戏”、自动保存时机、最佳成绩新存储键以及事件卡暂停由客户端任务完成。
@@ -172,7 +172,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 2. `calendar`（第二版任务 2）：公布今晚及未来 3 晚，设置风暴次日的视野期限；`incidents` 处理自动结算、隔离/减员/效果到期与当天抽取；然后 `modifiers`（任务 1）：重算 `game.modifiers`。
 3. `nav`（任务 1）：建筑占用变了就重建导航网格和流场。
 4. `spatial`（任务 1）：重建空间索引。
-5. `night`、`nests`、`mutantAi`、`soldiers`（任务 3）：黄昏预报、夜里刷怪、天亮撤退、巢穴；怪物和士兵决定目标、设置移动意图。然后 `control`（第三版）把命令已经结束的单位交回自动管理，`survivorAi`（第三版）给自动管理的幸存者派活，见“单位控制归属和幸存者 AI”。
+5. `night`、`nests`、`mutantAi`、`soldierAi`（第三版）、`soldiers`（任务 3）：黄昏预报、夜里刷怪、天亮撤退、巢穴；士兵 AI 给自动管理的士兵定岗位，见“士兵 AI”；怪物和士兵决定目标、设置移动意图。然后 `control`（第三版）把命令已经结束的单位交回自动管理，`survivorAi`（第三版）给自动管理的幸存者派活，见“单位控制归属和幸存者 AI”。
 6. `workers`（任务 2）：幸存者走去工作或维修、进出建筑；然后 `weather`（第二版任务 2）执行风暴腐蚀和户外暴露伤害。
 7. `movement`、`spatialAfterMove`、`fog`（任务 1）：移动、重建空间索引、更新迷雾。
 8. `exploration`（任务 2）：遗迹奖励，随后输出下一段残页。
@@ -201,7 +201,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 实体（`state.ts`）都有 `id、kind、faction、x、y、radius、hp、maxHp、armor、vision、lastDamagedTick`：
 
 - `survivor`：`motion`、`task`（`idle | work | repair`，任务 2）、`control`（`auto | player`，第三版）、`insideId`（在哪座建筑里工作，0 表示在地图上；在建筑里的幸存者不移动、不提供视野、不会被打）。
-- `soldier`：`type`、`motion`、`order`（`idle | move | attackMove | attackTarget | hold`，任务 1 由指令设置，任务 3 执行战斗部分）、`control`（`auto | player`，第三版）、`attack`（目标和冷却）、`veterancy`（击杀数、已选强化、是否待选）。
+- `soldier`：`type`、`motion`、`order`（`idle | move | attackMove | attackTarget | hold`，任务 1 由指令设置，任务 3 执行战斗部分）、`control`（`auto | player`，第三版）、`homeId`（所属训练建筑，白天在它的集结点待命，第三版）、`attack`（目标、冷却和岗位 `post`）、`veterancy`（击杀数、已选强化、是否待选）。
 - `mutant`：`type`、`motion`、`attack`、`ai`（`guard | assault | retreat`、所属巢穴、是否首领、伤害加成）。
 - `building`：`type`、占地 `tileX/tileY/size`、`construction`（`{progress,total}` 以 tick 计，完工后为 null）、`workers`、`trainQueue`、`rally`、`attack`（机枪塔用）。
 - `nest`：`isHive`、占地、`discovered`（玩家见过一次就为 true，客户端在“探索过”的迷雾下也画出来）、`growth`（等级和撤退累积的成长点）。
@@ -210,7 +210,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 `stats` 是多个系统写、灵感和计分读的计数器，每个字段注释里写了由哪个任务维护。
 
-派生数据：`game.nav`（`blocked`、`structureAt`、`region`（可通行格的连通区域编号，两格编号相同当且仅当 A* 能在两格之间找到路）、`flowCost`、`flowNext`，读之前调 `ensureNav(game)`）、`game.spatial`、`game.modifiers`、`game.events`。
+派生数据：`game.nav`（`blocked`、`structureAt`、`region`（可通行格的连通区域编号，两格编号相同当且仅当 A* 能在两格之间找到路）、`flowCost`、`flowNext`、`baseArea`（士兵 AI 的据点范围），读之前调 `ensureNav(game)`）、`game.spatial`、`game.modifiers`、`game.events`。
 
 坐标：格子 (tx, ty) 覆盖 [tx, tx+1) × [ty, ty+1)，实体坐标是浮点格坐标，格子中心是 (tx+0.5, ty+0.5)，下标 = ty × width + tx。射程和接触都按边缘距离算：单位是中心距离减半径，建筑是到占地矩形的距离（`edgeDistance`）。
 
@@ -250,7 +250,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 数值都在模拟层的数据表里，按归属分两份文件，便于任务 2、3 并行调整：
 
 - `data/economy.ts`（任务 2）：资源、开局资源和幸存者数、幸存者属性、增长、口粮、维修、建造、训练、13 种建筑、遗迹奖励表、15 项科技（三条线各 5 项，含灵感条件）、11 张政令、3 个营地特性。
-- `data/combat.ts`（任务 3）：伤害类型 × 护甲类型倍率表、7 个兵种（含训练建筑、科技、老兵击杀数和两个强化选项）、14 个强化、饥饿惩罚、机枪塔武器、6 种怪物、巢穴和母巢、母巢护盾 `HIVE_SHIELD`、20 夜的预算和组成（首领仅在日历大潮夜出现）、预报阈值、警报间隔、3 档难度、计分。
+- `data/combat.ts`（任务 3）：伤害类型 × 护甲类型倍率表、7 个兵种（含训练建筑、科技、老兵击杀数和两个强化选项）、14 个强化、饥饿惩罚、机枪塔武器、6 种怪物、巢穴和母巢、母巢护盾 `HIVE_SHIELD`、20 夜的预算和组成（首领仅在日历大潮夜出现）、预报阈值、警报间隔、士兵 AI 参数 `SOLDIER_AI`、3 档难度、计分。
 - `data/map.ts`（任务 1）：地形定义和地图生成参数。
 
 `data/data.test.ts` 检查数据的完整性（引用存在、科技无环、每种怪物有克制兵种等）。改数值不需要改这个测试；改结构时同步更新。
@@ -303,7 +303,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 - 第二版任务 2（已实现）：机器人仅用公开日历和预报估计威胁；平静夜保留已知巢穴威胁，风暴夜威胁为零，浓雾不给虚构方向。平静/风暴夜允许延长清巢行动，固定驻防兵仍守家。风暴黄昏和夜间停止招募抽调、维修和遗迹外出，优先把户外工人安排进有空工位的建筑；工位不足的完整应对留给任务 6。`node --import tsx src/headless/calendarStats.ts` 用 100 个种子×三档难度采样各夜黄昏的真实计划，统计夜晚类型和边缘夜袭比例（不是胜率模拟）。
 - 任务 2（第一版已定）：建造不需要幸存者，工地自己推进；对工地下维修指令的幸存者每人加 50% 速度，最多 3 人。训练在入队时就带走一名幸存者，取消订单或拆掉建筑时退还幸存者和费用；第三版起带走的是最近的、自动管理的幸存者（优先空闲的），不带走玩家指挥的，见“单位控制归属和幸存者 AI”。口粮每天在黄昏第一个 tick 结算一次，食物不够时吃光剩余食物、`upkeep.hungry = true`，持续到下一次结算，也就是覆盖当晚。工地生命从 10% 开始随进度增长，施工期间受的伤保留。零血工地不再推进施工或训练，随后由 cleanup 移除，不能靠同 tick 施工回血复活。
-- 任务 3（已定）：攻击即时命中，状态里没有弹体；客户端用 `shot` 事件（起点、终点）画弹道，用 `explosion` 事件画范围伤害。空闲士兵的察觉半径取"视野"和"射程 + 2.5"中较小的一个，但不小于射程，只追离站位 5 格以内的敌人，打完回到站位（`AttackState.post`，按停止键后原地成为新站位）。任务 6 补充：正在攻击据点（核心、任何建筑、幸存者）的怪物，只要玩家看得见、在射程内或离站位不超过“5 格 + 射程”，空闲士兵就会去打，不受察觉半径限制，所以核心在士兵够得着的地方挨打时士兵不会站着不动；其他士兵之间的交火不会把它们拉走。巢穴守卫在每天开始时补满到"基础数 + 每级数量 × 等级"，白天被打死的要到下一个天亮才补。`underAttack` 只在实体 4 秒没受伤后再次被打时发出，持续挨打只提示一次。
+- 任务 3（已定）：攻击即时命中，状态里没有弹体；客户端用 `shot` 事件（起点、终点）画弹道，用 `explosion` 事件画范围伤害。空闲士兵的察觉半径取"视野"和"射程 + 2.5"中较小的一个，但不小于射程。空闲士兵在哪里站、追多远，第三版任务 3 起由“士兵 AI”一节的规则决定（原来的“只追站位 5 格以内、远处只回应正在打据点的怪物”已取消）。巢穴守卫在每天开始时补满到"基础数 + 每级数量 × 等级"，白天被打死的要到下一个天亮才补。`underAttack` 只在实体 4 秒没受伤后再次被打时发出，持续挨打只提示一次。
 - 任务 4：客户端按每帧时间累积调用 `stepGame`（1/2/3 倍速对应每秒 20/40/60 tick），用两个 tick 之间的插值画位置；暂停时继续接受指令。
 
 ## 客户端读的规则函数（任务 6）
@@ -384,7 +384,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 ## 单位控制归属和幸存者 AI（第三版任务 2）
 
-**控制归属。** `Survivor.control` 和 `Soldier.control` 取 `auto | player`，所有出生途径（`world/entities.ts` 的 `spawnSurvivor/spawnSoldier`）默认 `auto`。任何单位指令（`move`、`attackMove`、`attackTarget`、`hold`、`assignWork`、`repair`）把被命令的单位设为 `player`；`stop`（X）立即交回 `auto`。`unassignWork` 撤出来的幸存者任务是 `wait`（等待命令），保持 `player`，AI 不动，直到玩家下新命令（按新命令的规则交回）或按 X；信号塔建成时撤出的施工队直接变为 `idle` 和 `auto`。有终点的命令结束时由 `world/control.ts` 的 `control` 系统交回：士兵的命令变回 `idle`（移动、攻击移动到达，集火目标消失），幸存者空闲地站在地图上（移动到达或卡住停下、维修完成、目标消失、到达时工位已满、工作的建筑被毁）。`hold`、派工和 `wait` 没有终点，保持 `player`；交回规则只看“空闲（`idle`）且站在地图上”，`wait` 永远不满足，所以两者是不同的任务类型，不靠计时区分。客户端的 K 撤退是移动到炉心，到达后同样交回。事件隔离的幸存者在隔离期间 AI 不动，隔离结束时（`incidents/effects.ts`）设为 `auto`。本任务里自动管理的士兵仍按原来的空闲/守卫规则行动，士兵 AI 由下一个任务实现。
+**控制归属。** `Survivor.control` 和 `Soldier.control` 取 `auto | player`，所有出生途径（`world/entities.ts` 的 `spawnSurvivor/spawnSoldier`）默认 `auto`。任何单位指令（`move`、`attackMove`、`attackTarget`、`hold`、`assignWork`、`repair`）把被命令的单位设为 `player`；`stop`（X）立即交回 `auto`。`unassignWork` 撤出来的幸存者任务是 `wait`（等待命令），保持 `player`，AI 不动，直到玩家下新命令（按新命令的规则交回）或按 X；信号塔建成时撤出的施工队直接变为 `idle` 和 `auto`。有终点的命令结束时由 `world/control.ts` 的 `control` 系统交回：士兵的命令变回 `idle`（移动、攻击移动到达，集火目标消失），幸存者空闲地站在地图上（移动到达或卡住停下、维修完成、目标消失、到达时工位已满、工作的建筑被毁）。`hold`、派工和 `wait` 没有终点，保持 `player`；交回规则只看“空闲（`idle`）且站在地图上”，`wait` 永远不满足，所以两者是不同的任务类型，不靠计时区分。客户端的 K 撤退是移动到炉心，到达后同样交回。事件隔离的幸存者在隔离期间 AI 不动，隔离结束时（`incidents/effects.ts`）设为 `auto`。自动管理的士兵由士兵 AI 安排，见“士兵 AI”。
 
 **指令变化。** `assignWork` 和 `repair` 现在也接受在建筑里工作的幸存者（不含隔离中的），他们先离开原建筑再前往；`move/attackMove/stop` 仍只接受地图上的单位。训练的拒绝原因改名为 `noAutoSurvivor`（“没有自动管理的幸存者可以训练”）。
 
@@ -393,3 +393,24 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 - 维护工作优先，先用空闲的人、按距离分配：低于 `repairBelowPct`（90%）的完工建筑按缺的血量派修理工（每 150 点一人，最多 3 人，炉心优先，其余按血量比例从低到高），信号塔工地的施工队，其他工地的帮工（每处最多 3 人）。白天维修（在修的人不超过自动管理人数的 25% 时）和信号塔施工队还可以从生产建筑里调人；工地自己会推进，不从生产里调人。附近出现可见怪物或库存没有废料时，正在维修的人被叫回。开始维修需要至少 20 废料。
 - 其余的人去生产。每条生产线（食物、废料、燃料、研究、调度站）的权重是 1，库存低于目标时最多乘到 `1 + shortageBoost`（4），高于过剩线时减半；研究只在有当前研究时权重为 1，否则为 0。食物的目标和过剩线都加上 1.5 天的士兵口粮。按权重把自动管理的人数分给各条线，每条线不超过它对 AI 可用的工位数；空闲的人去离份额差得最多的线里加成最高的建筑。白天每 `transferSeconds`（5 秒）最多调一个人，从超出份额最多的线调到差得最多的线，两条线的差距合计至少 `transferGap`（2 人）才调，这样库存在目标附近来回波动时不会来回调人。下次允许调人的 tick 存在 `economy.survivorAi.nextTransferTick`，参与存档和哈希。
 
+## 士兵 AI（第三版任务 3）
+
+**管哪些兵。** 自动管理的士兵就是命令为 `idle` 的士兵：玩家的命令结束时士兵变回 `idle` 并交回自动管理，按 X 也一样；原地坚守和正在执行玩家命令的士兵，AI 不会移动。`combat/soldierAi.ts` 的 `soldierAi` 系统在管线里排在 `soldiers` 之前，每 `SOLDIER_AI.intervalTicks`（10 tick）给每个自动管理的士兵定一个岗位（`AttackState.post`，`kind: 'guard'`），并让它走过去；士兵在岗位上打什么，由 `combat/soldiers.ts` 处理 `idle` 命令的分支决定。决策放在 10 的倍数加 5 的 tick 上：所有阶段切换都落在 10 的倍数上，这样黄昏和天亮时全体士兵重新寻路，不会和天亮那一 tick 的怪物集体撤退叠在一起。AI 只用玩家看得到的信息：自己的建筑和士兵、黄昏侦察报告（`night.forecast`）、数据表，以及当前可见格上的怪物。
+
+**据点范围。** 据点范围是格子中心离任意一座玩家建筑占地不超过 `baseMargin`（6 格）的格子，工地、路障、远处的油井和信号塔都算。之所以按建筑而不是按核心来定义，是因为玩家要保护的是建筑，围墙修到哪里，据点就到哪里。6 格大于喷吐者的射程（5 格），所以正在打建筑的怪物一定在据点范围里。这张表随导航网格一起重建（`nav.baseArea`，建筑占地变化时重建），查一次就是一次数组访问。
+
+**交战。** 健康的士兵只打可见的怪物，包括两类：在自己射程内的，以及在据点范围内、离岗位不超过 `responseRadius`（12 格）的。所以它会离开岗位去迎击进入据点的怪物，但不会追出据点；目标离开据点、又不在射程内时，士兵放弃目标，走回岗位。察觉半径内的目标每 tick 找一次，更远的每 10 tick 错开找一次，开销和原来的空闲规则同一量级。巢穴和母巢永远不会成为自动管理士兵的目标，巢穴守卫走进据点就照打。原来的规则以站位为界：只追站位 5 格加射程以内的敌人，远处只回应正在打据点的怪物。新规则以据点为界，这样夜里布在东侧的小队会去打从核心附近漏进来的怪物；代价是同一小队的人会一起离开岗位，去打 12 格内的入侵者。另外，所有不在强制移动中的士兵本来就会对射程内的任意怪物开火（`attacks.ts`），这一条没有变。
+
+**夜里布防。** 从黄昏公布侦察报告起，到天亮为止，规则如下。
+- 报告列出方向时，按预期威胁从大到小排列方向。预期威胁由 `expectedThreat` 计算：有瞭望塔时用确切数量，否则用该大小的典型值；机器人用的也是这个函数。一个方向只有在按威胁比例分到的人数不少于 `minSquad`（3 人）时才单独成队，否则从威胁最小的方向开始舍去。这样兵少的时候会集中去打最大的一路，而不是每路派一两个人、被各个击破；被舍去的方向由小队在据点范围内的迎击来应对。留下的方向按威胁比例分人（最大余数法），每队选白天岗位离它最近的士兵。小队站在从核心中心朝该方向 `postDistance`（7 格）的位置；只有核心时，据点范围最窄的地方离核心中心也有 7.5 格，所以岗位总在据点里。
+- 如果成队的方向合计不到预期威胁的一半，所有人在核心周围待命。典型情况是平静夜里六个巢穴各来一小队，或者只有两个兵、却有两路同样大的进攻。每一路最终都要来核心，守在核心比押在一个方向上覆盖的威胁更多。浓雾夜看不到方向，同样在核心周围待命。
+- 巢穴派出的队伍在报告里按它相对核心的方位出现，和地图边缘来的队伍一起算，不单独处理，因为玩家在报告里看到的也只有这些方向。
+- 报告说今晚没有进攻时（锈风暴夜，或者平静夜且没有二级以上的巢穴），士兵留在白天岗位。
+
+**低血量。** 血量低于 `retreatBelowPct`（30%）的士兵，不论白天黑夜都回到核心周围，路上不停下、不追击（经过时仍会对射程内的怪物开火），到了以后原地守着。游戏里没有任何回复士兵生命的机制，最大生命变化时也只是按比例保留，所以血量比例只降不升。因此士兵不会在阈值附近来回切换，也不存在“什么时候回到前线”的问题：它会一直留在核心，直到玩家下命令。
+
+**白天岗位和兵营。** `Soldier.homeId` 记录士兵所属的训练建筑（兵营、军械厂或改装车间），训练出来的士兵属于训练它的建筑。白天它在这座建筑的集结点待命；没有设集结点时，站在建筑靠核心一侧的旁边。没有存活所属建筑的士兵，包括开局的民兵、遗迹和事件给的兵，以及所属兵营被拆或被毁的兵，会在下一轮决策时归到离它最近的已完工训练建筑，并记进 `homeId`；地图上没有训练建筑时，它在核心周围待命。这样开局的民兵会去开局兵营的集结点，玩家设一个集结点就能安排所有兵白天站在哪里，兵营被毁后也不会留下无处可去的兵。集结点的含义因此从“新兵走过去站着”变成“这个兵营的兵白天在这里待命”。新兵出营就归自动管理（命令为 `idle`），不再攻击移动到集结点。“快速部署”的速度加成作用于新兵第一次走去白天岗位的路上（`deploymentGoal`），走到、被派往别的岗位或被玩家下令时清除。
+
+**队形和稳定性。** 同一个岗位的士兵用 `world/orders.ts` 的 `formationSlots` 排开，编号小的站在里面。新岗位离旧岗位不超过 `repostSlack`（1.2 格）时不重新派，所以有人加入或离开时，其他人不会跟着挪动；正在交战的健康士兵打完再去新岗位，受伤的士兵立刻就走。白天每个兵的位置只取决于所属建筑和它的集结点；夜里小队的分配只取决于侦察报告和士兵名单，士兵阵亡或交回自动管理时，最多有几个人换队。
+
+**状态。** 新增的状态只有 `Soldier.homeId`，岗位本来就存在 `AttackState.post` 里，两者都在实体上，参与存档和哈希。`SAVE_VERSION` 仍是 13：第三版的版本 13 还没有发布过，增加这个字段不需要再升版本。

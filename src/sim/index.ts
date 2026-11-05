@@ -45,7 +45,7 @@ export { buildingHousing, populationCount } from './economy/population';
 export { mutantWeapon, soldierWeapon, towerWeapon, towerWeaponOfType, type WeaponProfile } from './combat/weapons';
 export { veteranThreshold } from './combat/damage';
 export { hiveDamageReduction, ordinaryNestsLeft, type NestCensus } from './combat/hiveShield';
-export { compassDirection } from './combat/night';
+export { compassDirection, expectedThreat } from './combat/night';
 
 /** Hash of the canonical state: equal for equal seed + commands. */
 export function hashState(game: Pick<Game, 'state'>): string {

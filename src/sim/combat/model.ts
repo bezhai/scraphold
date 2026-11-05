@@ -18,7 +18,8 @@ export interface AttackState {
 }
 
 /**
- * guard: the spot an idle soldier walks back to after chasing an enemy.
+ * guard: the post of an idle soldier, under automatic control (soldierAi.ts picks it); the soldier
+ * walks back to it after a fight.
  * destination: the soldier's own goal of an attack-move toward (orderX, orderY); it resumes
  * walking there after each fight. A new attack-move to another point replaces it.
  */
