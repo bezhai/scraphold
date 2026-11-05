@@ -103,7 +103,7 @@ describe('signal integration and boundaries', () => {
   it('copies narrative dialogue without editorial changes', () => {
     const narrative = readFileSync(new URL('../../../docs/narrative.md', import.meta.url), 'utf8');
     for (const text of Object.values(SIGNAL_TEXT)) expect(narrative).toContain(text);
-    expect(narrative).toContain('车队已经出发，预计还要 N 天');
+    expect(narrative).toContain('长明城："车队预计 N 天后到达。"');
   });
   it('decodes on the tick research finishes after an earlier visit', () => {
     const g = fixture(); const u = spawnSurvivor(g, 21.5, 6.5); signalSystem(g); u.x = 1;

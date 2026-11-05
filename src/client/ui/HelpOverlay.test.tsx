@@ -17,7 +17,7 @@ describe('HelpOverlay', () => {
     expect(rows).toContain('O 胜利目标');
     expect(rows).toContain('Tab 打开待处理事件');
     expect(rows.some((r) => r.startsWith('Ctrl右键 强制移动'))).toBe(true);
-    expect(help.textContent).toContain('撑过二十夜、修好 K-7 中继站向长明城求救、找到母巢把它端掉，三条路都能赢。');
+    expect(help.textContent).toContain('炉心被摧毁就失败。满足以下任一条件获胜：守满 20 夜；摧毁母巢；修好 K-7 中继站，广播求援直到长明城的车队到达。');
     expect(help.textContent).not.toContain('据点核心');
   });
 });

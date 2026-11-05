@@ -99,7 +99,7 @@ describe('incident choices and exact source text', () => {
     });
     const fragments = narrative.split('## 遗迹残页\n')[1]!.split('## 信号塔')[0]!;
     expect(RUIN_FRAGMENTS).toEqual([...fragments.matchAll(/^\d+\. (.*)$/gm)].map(m => m[1]));
-    expect(RUIN_FRAGMENTS).toHaveLength(14);
+    expect(RUIN_FRAGMENTS).toHaveLength(8);
   });
   const cases: [IncidentId, string, Record<string, number>][] = [['caravan', 'fuel', {
     scrap: -60,
@@ -500,7 +500,7 @@ describe('incident draws and objectives', () => {
       reason: 'incidentReserved'
     });
   });
-  it('emits fourteen ordered fragments and stops, then resets for a new game', () => {
+  it('emits every fragment in order and stops, then resets for a new game', () => {
     const g = make();
     g.state.map.ruins = [];
     for (let i = 0; i < 16; i++) {
@@ -523,7 +523,7 @@ describe('incident draws and objectives', () => {
     rebuildSpatialIndex(g.spatial, g.state);
     explorationSystem(g);
     expect(g.events.filter(e => e.type === 'ruinFragment').map(e => e.text)).toEqual(RUIN_FRAGMENTS);
-    expect(g.state.incidents.fragmentIndex).toBe(14);
+    expect(g.state.incidents.fragmentIndex).toBe(RUIN_FRAGMENTS.length);
     expect(make().state.incidents.fragmentIndex).toBe(0);
   });
   it('round trips pending cards, active goals, isolation, fragments, modifiers and future replay', () => {

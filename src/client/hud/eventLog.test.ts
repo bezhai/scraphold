@@ -8,9 +8,10 @@ import { FEED_FADE_TICKS, FEED_HOLD_TICKS, FEED_LINES, HISTORY_LINES, alertFromE
 describe('logLineForEvent', () => {
   it('announces phases', () => {
     const { game } = buildTestWorld();
-    expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'night' })).toMatchObject({ text: '第 3 夜降临，守住据点', tone: 'danger' });
+    expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'night' })).toMatchObject({ text: '第 3 夜开始', tone: 'danger' });
     expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 3, phase: 'dusk' })).toMatchObject({ tone: 'warn' });
     expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 4, phase: 'day' })).toMatchObject({ text: '第 4 天 · 天亮了', tone: 'info' });
+    expect(logLineForEvent(game.state, { type: 'phaseChanged', day: 1, phase: 'day' })).toMatchObject({ text: '第 1 天', tone: 'info' });
   });
 
   it('reports construction and training at the building position', () => {
@@ -61,7 +62,7 @@ describe('logLineForEvent', () => {
     const event = { type: 'ruinExplored' as const, ruinId: 1, tile: 0,
       reward: { kind: 'resources' as const, amounts: { scrap: 80, fuel: 20 } }, feedback: null };
     expect(logLineForEvent(game.state, event)?.text).toBe('探索遗迹：获得 废料 80、燃料 20');
-    expect(logLineForEvent(game.state, { ...event, feedback: '仓库的门锈住了，撬了半天才打开。里面的东西保养得比我们还好。' })?.text).toBe('仓库的门锈住了，撬了半天才打开。里面的东西保养得比我们还好。');
+    expect(logLineForEvent(game.state, { ...event, feedback: '打开了仓库，得到 1 名狙击手。' })?.text).toBe('打开了仓库，得到 1 名狙击手。');
   });
 
   it('turns underAttack into an alert line', () => {
@@ -119,6 +120,7 @@ it('shows signal dialogue verbatim and distinguishes all victory log messages', 
   expect(new Set(texts).size).toBe(3);
   expect(texts[0]).toContain('20');
   expect(texts[2]).toContain('救援');
+  expect(texts[1]).toBe('母巢被摧毁，获得胜利！');
 });
 
 describe('incident lines', () => {

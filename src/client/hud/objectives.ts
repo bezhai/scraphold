@@ -26,7 +26,7 @@ export function findHive(view: GameView): NestView | null {
 function hiveStatus(view: GameView): string {
   if (view.stats.hiveDestroyed) return '母巢已经摧毁。';
   const hive = findHive(view);
-  if (!hive || !isNestKnown(view, hive)) return '母巢藏在远处的雾里，还没找到。';
+  if (!hive || !isNestKnown(view, hive)) return '母巢还没有找到。';
   return `母巢生命 ${Math.ceil((hive.hp / hive.maxHp) * 100)}%。`;
 }
 

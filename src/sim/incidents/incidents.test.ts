@@ -87,7 +87,7 @@ describe('daytime incidents', () => {
     }).ok).toBe(true);
     expect(g.events).toContainEqual(expect.objectContaining({
       type: 'incidentResolved',
-      feedback: '商队走了，扬起一路的灰。'
+      feedback: '商队离开了。'
     }));
     expect(validateCommand(g, {
       type: 'resolveIncident',

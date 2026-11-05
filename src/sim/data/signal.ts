@@ -4,20 +4,19 @@ export const SIGNAL_STAGE_NAMES: Record<SignalStage, string> = { decoding: '未�
 export const SIGNAL = { repairDays: 3, workerSlots: 3, unmannedDelaySeconds: 15, broadcastNights: 3, retainProgress: 0.5, arrivalReach: 1.2 };
 export const RELAY = {
   name: 'K-7 中继站',
-  hint: '雾里那座铁塔是旧时代的 K-7 中继站，天线还立着。',
-  description: '旧时代沿北线修建的信号中继站之一。修好它，就能向长明城发出求救信号。',
+  description: '旧时代北线的信号中继站。研究"旧频段破译"后，可以在原址修建信号塔，向长明城求援。',
 };
 export const SIGNAL_TEXT = {
-  discovered: '小满："那座铁塔！是中继站！老顾，你能修吗？" 老顾："得先知道它说什么话。"',
-  research: '小满："我把能找到的旧频段资料都翻出来了。"',
-  decoded: '老顾："密钥对上了。给我材料和人手，我把它重新立起来。"',
-  build: '老顾："修这东西要时间。人别撤，材料别断。"',
-  paused: '老顾："工地没人，我一个人可立不起塔。"',
-  ready: '老顾："塔立起来了，随时能开机。不过开了机，雾里的东西也听得见。"',
-  broadcast: '小满："信号发出去了！频率四四七点二……长明城，长明城，这里是锈原。"',
-  dawn: '长明城接线员："锈原，我们收到了。车队正在集结，预计还要 N 天，请坚持住。"',
-  destroyed: '小满："信号断了！塔倒了！"老顾："还能修，就是得从头接线。"',
-  convoy: '长明城接线员："车队已经出发，预计还要 N 天。"',
+  discovered: '发现了 K-7 中继站。研究"旧频段破译"后可以在这里修建信号塔。',
+  research: '开始破译旧频段。',
+  decoded: '旧频段已经破译，可以在 K-7 中继站修建信号塔。',
+  build: '信号塔开始修建，工人在场时才有进度。',
+  paused: '信号塔工地没有工人，修建暂停。',
+  ready: '信号塔建好了。开始广播后，变异体会专门来攻击信号塔。',
+  broadcast: '信号塔开始向长明城广播。',
+  dawn: '长明城："收到你们的信号。车队预计 N 天后到达。"',
+  destroyed: '信号塔被摧毁，广播中断。',
+  convoy: '长明城："车队预计 N 天后到达。"',
   endingTitle: '长明城的车队',
-  ending: '车队是在正午到的，车头漆着一盏灯。接线员本人跳下车，跟每个人握了手。\'我们以为北线已经没有人了。\'小满哭了，老顾假装在检查轮胎。你回头看了一眼炉心，它还亮着。',
+  ending: '长明城的车队到了，拓荒队跟着车队去了长明城。',
 } as const;

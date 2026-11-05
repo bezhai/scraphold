@@ -10,7 +10,7 @@ export function PauseMenu({ session, onRestart, onQuit }: { session: Session; on
     <div class="modal-back">
       <div class="panel menu" data-testid="pause-menu">
         <h2>暂停</h2>
-        <div class="menu-sub">游戏已暂停，随时可以回来</div>
+        <div class="menu-sub">游戏已暂停</div>
         <button class="btn primary" onClick={() => session.closeMenu()}>
           继续
         </button>

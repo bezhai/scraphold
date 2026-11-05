@@ -2347,21 +2347,6 @@ button.pop-item:active {
   margin-bottom: 26px;
 }
 
-.title-block .kicker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  letter-spacing: 0.5em;
-  color: var(--accent-hi);
-}
-
-.title-block .kicker .hazard {
-  width: 28px;
-  height: 2px;
-  background: var(--accent);
-}
-
 .title-block h1 {
   margin: 12px 0 0;
   font-family: var(--font-display);
@@ -3240,13 +3225,6 @@ button.pop-item:active {
   gap: 12px;
   box-shadow: 0 8px 36px rgba(0, 0, 0, 0.6);
 }
-.intro-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
 .intro-title {
   font-family: var(--font-display);
   font-size: 24px;
@@ -3266,7 +3244,7 @@ button.pop-item:active {
   margin-top: 8px;
 }
 
-/* StartScreen AutoSave and Origin Quotes */
+/* StartScreen AutoSave */
 .autosave-section {
   margin-bottom: 16px;
 }
@@ -3278,13 +3256,6 @@ button.pop-item:active {
 .autosave-btn {
   font-weight: 700;
   font-size: 14px;
-}
-.o-quote {
-  font-size: 11px;
-  font-style: italic;
-  color: var(--sand-hi);
-  margin: 4px 0;
-  line-height: 1.4;
 }
 
 /* Retreat Button */

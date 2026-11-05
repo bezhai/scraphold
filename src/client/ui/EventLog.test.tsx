@@ -59,7 +59,7 @@ describe('EventLog', () => {
 
   it('shows the dusk radio broadcast from the state', () => {
     const w = buildTestWorld();
-    const text = RADIO_BROADCASTS.denseFog[1]!;
+    const text = RADIO_BROADCASTS.denseFog[0]!;
     w.game.state.night.broadcast = { night: 1, type: 'denseFog', text };
     w.game.state.tick = DAY_TICKS - 200;
     w.game.state.clock = clockAt(w.game.state.tick);

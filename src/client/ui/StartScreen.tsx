@@ -12,12 +12,6 @@ import { dailySeed, randomSeed, seedForChoice, type SeedMode } from '../seeds';
 import type { BestScores } from '../storage/bestScores';
 import { clearAutoSave, loadAutoSave, peekAutoSaveSummary, type AutoSaveSummary } from '../storage/autoSave';
 
-const ORIGIN_QUOTES: Record<OriginId, string> = {
-  scavengers: '“我们在锈原的废墟里长大，知道哪块铁能用、哪块铁会要命。”',
-  militia: '“旧驻军的番号早就没人记得了，枪还在，规矩也还在。”',
-  scholars: '“避难所的门开了以后，我们带出来的不只是书，还有怎么读懂旧时代的办法。”',
-};
-
 function originStart(id: OriginId): string {
   const s = ORIGINS[id].start;
   const parts: string[] = [];
@@ -101,16 +95,12 @@ export function StartScreen({ best, onStart, onContinue }: { best: BestScores; o
       <div class="start-inner">
         <div>
           <div class="title-block">
-            <div class="kicker">
-              <span class="hazard" />
-              废土守家 · 二十个昼夜
-            </div>
             <h1>
               锈土<span class="dot">·</span>据点
             </h1>
             <div class="latin">SCRAPHOLD</div>
             <div class="pitch" data-testid="pitch">
-              白天派幸存者拾荒、种地、炼油、做研究，把据点建起来；夜里变异体从雾里摸过来，守住炉心。撑过二十夜、修好 K-7 中继站向长明城求救、找到母巢把它端掉，三条路都能赢。
+              炉心被摧毁就失败。满足以下任一条件获胜：守满 20 夜；摧毁母巢；修好 K-7 中继站，广播求援直到长明城的车队到达。
             </div>
           </div>
 
@@ -135,7 +125,6 @@ export function StartScreen({ best, onStart, onContinue }: { best: BestScores; o
                   <span class="o-tag">0{i + 1}</span>
                   <span class="o-name">{ORIGINS[id].name}</span>
                   <span class="o-desc">{ORIGINS[id].description}</span>
-                  <div class="o-quote">{ORIGIN_QUOTES[id]}</div>
                   <span class="o-start">{originStart(id)}</span>
                 </button>
               ))}
@@ -216,7 +205,7 @@ export function StartScreen({ best, onStart, onContinue }: { best: BestScores; o
           <div class="panel">
             <div class="label">据点周边</div>
             <div class="map-caption">
-              背景是这个种子下炉心附近的地形。沃土适合温室，残骸适合拆解站，黑色油渍只能建油井；更远的地方藏着遗迹和巢穴。
+              背景是这个种子下炉心附近的地形。沃土适合温室，残骸适合拆解站，黑色油渍只能建油井；更远处有遗迹和巢穴。
             </div>
           </div>
         </div>

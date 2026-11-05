@@ -30,17 +30,17 @@ type Origin = 'scavengers' | 'militia' | 'scholars';
 
 /** docs/narrative.md「夜晚类型」: name on the calendar, one-line description in its hover card. */
 const NIGHTS: Record<NightType, [string, string]> = {
-  calm: ['平静', '雾很薄，边缘不会来怪；巢穴还是会派出自己的那队。'],
-  raid: ['夜袭', '变异体会从几个方向摸过来。'],
-  rustStorm: ['锈风暴', '不来怪，但锈蚀的风会腐蚀建筑，待在外面的人会受伤。'],
-  denseFog: ['浓雾', '照常来怪，可雾太浓，看不清它们从哪边来。'],
-  surge: ['大潮', '雾潮涨起来了，今晚的怪会比平时多得多。'],
+  calm: ['平静', '边缘不会来变异体，巢穴仍会派出自己的队伍。'],
+  raid: ['夜袭', '变异体会从一个或几个方向过来。'],
+  rustStorm: ['锈风暴', '不来变异体，但风暴会腐蚀建筑，户外的人会受伤。'],
+  denseFog: ['浓雾', '照常来变异体，但预报里看不到方向。'],
+  surge: ['大潮', '来的变异体比平时多得多。'],
 };
 
 /** docs/narrative.md「地图上的特殊遗迹」. */
 const SPECIAL_RUINS = {
-  supplyPod: { name: '坠落的补给舱', description: '旧时代的轨道补给舱，砸进沙地里，还没被人翻过。' },
-  warehouse: { name: '旧时代仓库', description: '一扇厚重的金属门，门牌上印着仓库编号。' },
+  supplyPod: { name: '坠落的补给舱', description: '旧时代的轨道补给舱，坠落在这里，还没有被打开过。' },
+  warehouse: { name: '旧时代仓库', description: '旧时代的物资仓库，门还锁着。' },
 } as const;
 
 /** docs/narrative.md「结局」titles and epilogues; subtitles from the coordinator's copy. */
@@ -48,22 +48,22 @@ const ENDINGS = {
   survived: {
     title: '第二十一个早晨',
     subtitle: () => '守到了第 21 天',
-    epilogue: '太阳出来的时候，雾退得比以往任何一天都远。小满在墙上刻下第二十一道痕，然后把刀递给了你。锈原还是锈原，但这里已经是一个家了。',
+    epilogue: '据点撑过了二十个夜晚，拓荒队在锈原留了下来。',
   },
   hiveDestroyed: {
     title: '雾散了',
     subtitle: (day: number) => `第 ${day} 天摧毁了母巢`,
-    epilogue: '母巢塌下去的那一刻，整片锈原的雾都晃了一下。那天下午，大家第一次在没有炉心的地方摘下了面罩。老顾说，北边应该也能看到这片天。',
+    epilogue: '母巢被摧毁，锈原上的巢穴失去了孢子来源。',
   },
   signal: {
     title: '长明城的车队',
     subtitle: (day: number) => `第 ${day} 天，长明城的车队到了`,
-    epilogue: "车队是在正午到的，车头漆着一盏灯。接线员本人跳下车，跟每个人握了手。'我们以为北线已经没有人了。'小满哭了，老顾假装在检查轮胎。你回头看了一眼炉心，它还亮着。",
+    epilogue: '长明城的车队到了，拓荒队跟着车队去了长明城。',
   },
   coreDestroyed: {
     title: '炉心熄灭',
     subtitle: (day: number) => `炉心在第 ${day} 天熄灭`,
-    epilogue: '炉心熄灭以后，雾在一刻钟里漫过了围墙。有人往北跑，有人留下来。很多年以后，路过的拾荒者会在这片废墟里找到一面刻满痕迹的墙。',
+    epilogue: '炉心被摧毁，据点失守。',
   },
 } as const;
 
@@ -236,7 +236,7 @@ test('look at the calendar, find the relay, handle the first incident', async ({
     await expect(card.locator('.title')).toHaveText('胜利目标');
     await expect(page.getByTestId('objective-survive')).toContainText('撑过二十夜');
     await expect(page.getByTestId('objective-survive')).toContainText('守到第 21 天天亮。现在是第 1 天。');
-    await expect(page.getByTestId('objective-hive')).toContainText('母巢藏在远处的雾里，还没找到。');
+    await expect(page.getByTestId('objective-hive')).toContainText('母巢还没有找到。');
     await expect(page.getByTestId('objective-signal')).toContainText('找到 K-7 中继站，并研究"旧频段破译"。');
     await page.getByTestId('calendar-strip').hover();
     await expect(page.getByTestId('calendar-tip')).toHaveCount(0);
@@ -256,7 +256,7 @@ test('look at the calendar, find the relay, handle the first incident', async ({
     await expect(page.getByTestId('terrain-hint')).toContainText('K-7 中继站：');
     await shot(page, 'v2-02-relay-found');
     await page.getByTestId('log-toggle').click();
-    await expect(page.getByTestId('event-log')).toContainText('那座铁塔！是中继站！');
+    await expect(page.getByTestId('event-log')).toContainText('发现了 K-7 中继站。研究"旧频段破译"后可以在这里修建信号塔。');
     await page.getByTestId('log-toggle').click();
     await page.keyboard.press('Space');
   });

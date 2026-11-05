@@ -67,7 +67,7 @@ it.each(['night', 'afterDuskPlan'] as const)('starting broadcast %s leaves live,
   expect({ night: g.state.night, mutants: [...g.state.entities.values()].filter(e => e.kind === 'mutant') }).toEqual(before);
   tick(g, 6 * CYCLE_TICKS);
   expect(g.state.signal.nightsHeld).toBe(0);
-  expect(messages(g).at(-1)).toBe('长明城接线员："锈原，我们收到了。车队正在集结，预计还要 3 天，请坚持住。"');
+  expect(messages(g).at(-1)).toBe('长明城："收到你们的信号。车队预计 3 天后到达。"');
   const next = planNight(g, 7);
   expect(next.groups.filter(group => group.assaultTargetId === b.id)).toHaveLength(1);
 });
@@ -76,9 +76,9 @@ it('uses complete first/later dawn templates and skips operator dialogue at resc
   const { g } = fixture(true);
   applyCommand(g, { type: 'startSignalBroadcast' });
   tick(g, CYCLE_TICKS);
-  expect(messages(g).at(-1)).toBe('长明城接线员："锈原，我们收到了。车队正在集结，预计还要 2 天，请坚持住。"');
+  expect(messages(g).at(-1)).toBe('长明城："收到你们的信号。车队预计 2 天后到达。"');
   tick(g, 2 * CYCLE_TICKS);
-  expect(messages(g).at(-1)).toBe('长明城接线员："车队已经出发，预计还要 1 天。"');
+  expect(messages(g).at(-1)).toBe('长明城："车队预计 1 天后到达。"');
   g.events.length = 0;
   tick(g, 3 * CYCLE_TICKS);
   outcomeSystem(g);
@@ -97,7 +97,7 @@ it('after destruction and a new broadcast, the next dawn uses the first template
   signalSystem(g);
   applyCommand(g, { type: 'startSignalBroadcast' });
   tick(g, 2 * CYCLE_TICKS);
-  expect(messages(g).at(-1)).toBe('长明城接线员："锈原，我们收到了。车队正在集结，预计还要 2 天，请坚持住。"');
+  expect(messages(g).at(-1)).toBe('长明城："收到你们的信号。车队预计 2 天后到达。"');
 });
 
 it('never announces an empty site during initial worker travel', () => {

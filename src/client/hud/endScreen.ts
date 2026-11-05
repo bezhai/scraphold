@@ -2,6 +2,7 @@
 import { clockAt, type GameView } from '../../sim';
 import { MUTANTS, MUTANT_TYPES } from '../../sim/data/combat';
 import { RESOURCE_NAMES, RESOURCES, type Resource } from '../../sim/data/economy';
+import { SIGNAL_TEXT } from '../../sim/data/signal';
 import { TOTAL_NIGHTS } from '../../sim/time';
 import type { BestScore } from '../storage/bestScores';
 
@@ -21,10 +22,10 @@ export interface EndSummary {
 }
 
 const EPILOGUES = {
-  survived: '太阳出来的时候，雾退得比以往任何一天都远。小满在墙上刻下第二十一道痕，然后把刀递给了你。锈原还是锈原，但这里已经是一个家了。',
-  hiveDestroyed: '母巢塌下去的那一刻，整片锈原的雾都晃了一下。那天下午，大家第一次在没有炉心的地方摘下了面罩。老顾说，北边应该也能看到这片天。',
-  signal: "车队是在正午到的，车头漆着一盏灯。接线员本人跳下车，跟每个人握了手。'我们以为北线已经没有人了。'小满哭了，老顾假装在检查轮胎。你回头看了一眼炉心，它还亮着。",
-  coreDestroyed: '炉心熄灭以后，雾在一刻钟里漫过了围墙。有人往北跑，有人留下来。很多年以后，路过的拾荒者会在这片废墟里找到一面刻满痕迹的墙。',
+  survived: '据点撑过了二十个夜晚，拓荒队在锈原留了下来。',
+  hiveDestroyed: '母巢被摧毁，锈原上的巢穴失去了孢子来源。',
+  signal: SIGNAL_TEXT.ending,
+  coreDestroyed: '炉心被摧毁，据点失守。',
 } as const;
 
 function sum(record: Readonly<Record<string, number>>): number {

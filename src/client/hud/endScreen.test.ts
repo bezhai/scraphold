@@ -15,7 +15,7 @@ describe('endSummary', () => {
     game.state.outcome.score = { victory: 1000, earlyDays: 0, hive: 0, nests: 300, survivors: 160, buildingsLost: -50, multiplier: 1, total: 1410 };
     const s = endSummary(game.state);
     expect(s).toMatchObject({ won: true, headline: '第二十一个早晨', reason: '守到了第 21 天', day: TOTAL_NIGHTS + 1, total: 1410 });
-    expect(s.epilogue).toContain('太阳出来的时候');
+    expect(s.epilogue).toBe('据点撑过了二十个夜晚，拓荒队在锈原留了下来。');
     expect(s.scoreRows).toEqual([
       ['胜利', 1000],
       ['提前获胜', 0],
@@ -30,15 +30,15 @@ describe('endSummary', () => {
   it('a hive victory names the day; a signal victory shows convoy; a defeat has no score', () => {
     const hive = endSummary(finish('won', 'hiveDestroyed', 2200 * 6 + 100).state);
     expect(hive).toMatchObject({ headline: '雾散了', reason: '第 7 天摧毁了母巢' });
-    expect(hive.epilogue).toContain('母巢塌下去的那一刻');
+    expect(hive.epilogue).toBe('母巢被摧毁，锈原上的巢穴失去了孢子来源。');
 
     const signal = endSummary(finish('won', 'signal', 2200 * 8 + 100).state);
     expect(signal).toMatchObject({ headline: '长明城的车队', reason: '第 9 天，长明城的车队到了' });
-    expect(signal.epilogue).toContain('车队是在正午到的');
+    expect(signal.epilogue).toBe('长明城的车队到了，拓荒队跟着车队去了长明城。');
 
     const lost = endSummary(finish('lost', 'coreDestroyed', 2200 * 2 + 1500).state);
     expect(lost).toMatchObject({ won: false, headline: '炉心熄灭', reason: '炉心在第 3 天熄灭', total: null, scoreRows: [] });
-    expect(lost.epilogue).toContain('炉心熄灭以后');
+    expect(lost.epilogue).toBe('炉心被摧毁，据点失守。');
   });
 
   it('summarizes the stats', () => {

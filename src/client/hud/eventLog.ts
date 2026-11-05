@@ -65,9 +65,9 @@ function ruinRewardText(reward: RuinReward): string {
 export function logLineForEvent(view: GameView, event: GameEvent): LogLine | null {
   switch (event.type) {
     case 'phaseChanged':
-      if (event.phase === 'night') return line(`第 ${event.day} 夜降临，守住据点`, 'danger');
+      if (event.phase === 'night') return line(`第 ${event.day} 夜开始`, 'danger');
       if (event.phase === 'dusk') return line('黄昏：夜晚即将来临。把士兵摆到来袭方向，空闲的幸存者派进建筑', 'warn');
-      return line(event.day === 1 ? '第 1 天 · 在废土上扎根' : `第 ${event.day} 天 · 天亮了`, 'info');
+      return line(event.day === 1 ? '第 1 天' : `第 ${event.day} 天 · 天亮了`, 'info');
     case 'forecastReady': {
       // Dense fog hides the directions and a storm night has no attack: nothing to look at.
       const forecast = view.night.forecast;
@@ -117,7 +117,7 @@ export function logLineForEvent(view: GameView, event: GameEvent): LogLine | nul
       return line('有士兵升为老兵，可以选择强化', 'good', positionOf(view, event.unitId));
     case 'gameOver':
       if (event.status === 'lost') return line('炉心被摧毁，据点失守', 'danger');
-      return line(event.reason === 'hiveDestroyed' ? '母巢被摧毁，据点赢得了废土' : event.reason === 'signal' ? '长明城的车队抵达，救援成功！' : `撑过了第 ${TOTAL_NIGHTS} 夜，据点守住了！`, 'good');
+      return line(event.reason === 'hiveDestroyed' ? '母巢被摧毁，获得胜利！' : event.reason === 'signal' ? '长明城的车队抵达，救援成功！' : `撑过了第 ${TOTAL_NIGHTS} 夜，据点守住了！`, 'good');
     case 'incidentResolved': {
       if (event.feedback) return line(event.feedback, 'info');
       // Target options have no feedback of their own: say where the objective is and how long it lasts.

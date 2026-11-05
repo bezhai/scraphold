@@ -12,7 +12,7 @@ describe('objectivesModel', () => {
     const game = createGame({ seed: 'test-obj-1', origin: 'scholars', difficulty: 'normal' });
     expect(objectivesModel(game)).toEqual([
       { id: 'survive', tag: '坚守', title: '撑过二十夜', status: '守到第 21 天天亮。现在是第 1 天。' },
-      { id: 'hive', tag: '清巢', title: '摧毁母巢', status: '母巢藏在远处的雾里，还没找到。' },
+      { id: 'hive', tag: '清巢', title: '摧毁母巢', status: '母巢还没有找到。' },
       { id: 'signal', tag: '求援', title: '信号塔', status: '找到 K-7 中继站，并研究"旧频段破译"。' },
     ]);
     game.state.clock = clockAt(6 * CYCLE_TICKS + 10);
@@ -36,7 +36,7 @@ describe('objectivesModel', () => {
   it('a map without a hive is not mistaken for a destroyed one', () => {
     const { game } = buildTestWorld();
     expect(findHive(game.state)).toBeNull();
-    expect(statusOf(game, 'hive')).toBe('母巢藏在远处的雾里，还没找到。');
+    expect(statusOf(game, 'hive')).toBe('母巢还没有找到。');
   });
 
   it('while the tower is built: progress and the workers actually on site (not the ones still walking there)', () => {

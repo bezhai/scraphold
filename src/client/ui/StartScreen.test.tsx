@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGame } from '../../sim';
+import { ORIGIN_IDS } from '../../sim/data/economy';
 import { clearAutoSave, saveAutoSave } from '../storage/autoSave';
 import { StartScreen } from './StartScreen';
 
@@ -41,11 +43,18 @@ describe('StartScreen', () => {
     expect(onStart).toHaveBeenCalledWith({ seed: `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`, origin: 'scavengers', difficulty: 'normal' });
   });
 
-  it('introduces the game with the finalized paragraph', () => {
+  it('introduces the game with the start-screen paragraph of docs/narrative.md', () => {
+    const paragraph = readFileSync('docs/narrative.md', 'utf8').split('开始界面的介绍段落：\n\n> ')[1]!.split('\n')[0];
     render(<StartScreen best={{}} onStart={vi.fn()} />);
-    expect(screen.getByTestId('pitch').textContent).toBe(
-      '白天派幸存者拾荒、种地、炼油、做研究，把据点建起来；夜里变异体从雾里摸过来，守住炉心。撑过二十夜、修好 K-7 中继站向长明城求救、找到母巢把它端掉，三条路都能赢。',
-    );
+    expect(screen.getByTestId('pitch').textContent).toBe(paragraph);
+  });
+
+  it('shows each camp origin with its effects only, without a background quote', () => {
+    render(<StartScreen best={{}} onStart={vi.fn()} />);
+    for (const id of ORIGIN_IDS) {
+      const card = screen.getByTestId(`origin-${id}`);
+      expect([...card.children].map((c) => c.className)).toEqual(['o-tag', 'o-name', 'o-desc', 'o-start']);
+    }
   });
 
   it('offers to continue the autosave; the delete button explains what it deletes', () => {

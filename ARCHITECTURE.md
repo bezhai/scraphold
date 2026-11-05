@@ -72,19 +72,19 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 - 难度数据新增 `calmNights/stormNights/denseFogNights/surgeBudgetMultiplier`。简单为 `6/2/2/1.3`，普通为 `5/2/3/1.5`，困难为 `4/3/4/1.7`；余下非大潮夜为普通夜袭。因此无边缘夜袭分别为 8/7/7 晚。大潮预算为 `NIGHTS[n-1].budget × nightBudgetPct × surgeBudgetMultiplier`，额外增加一个方向，最多使用实际存在的出生点。预算表中的 `boss` 是该日发生大潮时的候选首领，普通夜袭和浓雾不使用；第一次首领跟随第一个大潮，第 20 夜必有首领。普通巢穴/母巢等级上限为 12/20。母巢基础生命 100000，每级增加 1600；守卫为 10 + 2 × 等级。`DifficultyDef.hiveHpPct` 在简单/普通/困难分别为 0.8/1/1.2，仅缩放母巢生命；实体创建和成长共用 `nestMaxHp`，每天及撤退吸收仍可提升等级，增加生命上限时只补本次增加量。普通巢穴专属生命、成长和守卫配置不变，怪物伤害仍使用难度的全局倍率；母巢不分裂。
 - 平静夜只保留巢穴攻击组；锈风暴不产生边缘或巢穴攻击组，已有守卫仍按既有规则行动。其他夜晚正常生成夜袭，浓雾夜隐藏方向。
 - `NightForecast.directionsKnown` 明确表示是否知道方向。浓雾固定 `{directionsKnown:false, precise:false, groups:[]}`，瞭望塔不能解除；其他类型为 true，空组表示没有进攻组。`night.plan` 是模拟规则使用的真实计划，客户端和机器人不得用它推断浓雾方向。
-- `night.broadcast: {night, type, text} | null`：黄昏第一个 tick 写入小满的完整播报，持续到天亮后清空。普通夜晚按类型从 `RADIO_BROADCASTS` 用种子选取，第 20 夜固定 `FINAL_RADIO_BROADCAST`。文案及日历提示逐字取自 `docs/narrative.md`；本轮只提供状态，日志展现由客户端任务接入。
+- `night.broadcast: {night, type, text} | null`：黄昏第一个 tick 写入当晚的完整播报，持续到天亮后清空。普通夜晚按类型从 `RADIO_BROADCASTS` 用种子选取（每种类型只有一条，但仍用 `pick` 抽取，保证日历随机数的消耗不变），第 20 夜固定 `FINAL_RADIO_BROADCAST`。文案及日历提示逐字取自 `docs/narrative.md`；本轮只提供状态，日志展现由客户端任务接入。
 - 锈风暴每秒腐蚀建筑最大生命的 0.4%，核心再乘 0.15，且腐蚀本身不使核心生命低于 1；户外幸存者每秒损失 0.6 生命，建筑内工人和士兵不受暴露伤害。包括工地在内的玩家建筑均受腐蚀，环境伤害绕过武器护甲倍率，复用统一伤亡统计。新增全局修正键 `stormBuildingDamageTakenPct`、`stormOutdoorDamageTakenPct`，分别乘 `max(0, 1 + 修正和)`，可由科技、政令使用；`-1` 为完全免疫，不产生伤害或警报。
 - `calendar.reducedVisionUntilTick` 为风暴后视野惩罚的排他结束 tick；次日天亮起持续至次日入夜（含黄昏），全局视野乘 0.8。浓雾夜视野乘 0.65，只在夜间生效。`visionRadius` 统一应用天气缩放，渲染和规则无需重复计算。
 
 - `incidents: IncidentState` 保存事件卡、历史、限时目标和持续效果，全部参与哈希及存档。具体契约和规则见下面“白天事件与遗迹残页”。
-- `data/incidents.ts` 为 13 个事件、31 个选项及 2 类目标的唯一效果数据表；标题、正文、选项、反馈逐字取自 `docs/narrative.md`。`data/fragments.ts` 保存 14 段残页原文及署名。
+- `data/incidents.ts` 为 13 个事件、31 个选项及 2 类目标的唯一效果数据表；标题、正文、选项、反馈逐字取自 `docs/narrative.md`。`data/fragments.ts` 保存 8 段残页原文及署名。
 - `map.relaySite: RelaySite | null` 是固定的 `{tileX, tileY, size:3}`，手画测试地图可以为 null。独立于一次性奖励遗迹；学者开局揭示遗迹不揭示中继站。废墟可通行，普通建筑不能覆盖。`BuildingType.signalTower` 只能通过 `placeBuilding` 建在这个原址。
 - `signal: SignalState`：`site` 固定；`discovered` 表示占地进入探索范围；`visited` 永久记录任意存活己方单位到达占地边缘 1.2 格内。完成 `oldFrequency` 且曾经到达即自动破译，先到访后研究也在研究完成当 tick 生效。
 - `stage: decoding | repair | ready | broadcast`；`buildingId` 是工地/成塔实体 id，未建或被毁为 0。施工唯一真值为该实体的 `construction.progress/total`；工人唯一名单为 `Building.workers`，使用 `assignWork/unassignWork`。在途工人不施工，实际入驻的存活工人按工位上限线性增加速度；普通 repair 助建不推进信号塔。建成同 tick 通过共用撤工逻辑释放在岗工人；在途工人在下次 workers 阶段回到空闲；已建成的塔拒绝新的 `assignWork`。`ready` 不自动广播。
 - `retainedProgress` 是下次重新付费放置可恢复的施工比例，正常为 0；被毁保存实际已完成比例的 50%，成塔被毁为 50%。重新放置后消费该值，取消/主动拆除不保留进度。没有额外工人名单或重复的活动施工进度。
 - `nightsHeld/nightsRequired` 表示广播进度；基础需要 3 晚，`signalAmplification` 减少 1 晚（目标即时更新；若已守足两晚，研究完成即可触发胜利，避免因研究时机额外等待一晚）；`broadcastStartedTick`（初值 -1）与 `lastHeldNight` 防止重复结算；只有开播后才进入黄昏规划的夜晚计数，黄昏规划之后或夜里开播的当晚均不计数。`lastHeldNight` 是最近已处理的广播天亮对应夜号（包括未计数的首晚）。塔被毁清零广播进度并回到 `repair`。风暴夜也计数：风暴会持续损伤塔，守住风暴同样应获得进展。
 - `researchAnnounced` 保证首次开始破译研究只发一次消息。原 `unmannedAnnounced` 已删除，改为 `constructionStaffed`（本次施工曾有在岗工人）、`unmannedSinceTick`（连续无人起点，-1 表示未计时）及 `lastUnmannedDay`（最近提示日，初值 0）。连续无人 15 秒才发提示（`SIGNAL.unmannedDelaySeconds`）；首次派工的在途时间不计；工人回来清空计时，可再次触发，但同一天最多一次，重建也不绕过同日限制。
-- `GameEvent.signalMessage.text` 直接输出完整 narrative 原文模板。开播后首个天亮使用集结句，之后使用出发句，将 N 替换为还需守住的晚数；不计数的首晚仍播报剩余晚数。满额天亮不发接线员话语，直接输出救援尾声。被毁重启后重新使用首句。事件只供显示，不反推玩法状态。
+- `GameEvent.signalMessage.text` 直接输出完整 narrative 原文模板。开播后首个天亮使用 `SIGNAL_TEXT.dawn`（带“收到你们的信号”），之后使用 `SIGNAL_TEXT.convoy`，将 N 替换为还需守住的晚数；不计数的首晚仍播报剩余晚数。满额天亮不发长明城的回复，直接输出救援尾声。被毁重启后重新使用首句。事件只供显示，不反推玩法状态。
 - 广播定向攻击沿用 `AttackGroup.assaultTargetId → PendingSpawn.assaultTargetId → MutantAi.assaultTargetId`（0 为核心）。开播指令不修改任何已经规划、待生成或在场怪物的目标；之后的夜袭规划从新生成的方向队伍/巢穴队伍中指定恰好一组攻塔，平静夜仅从巢穴队伍中选择；不额外提高预算，风暴不刷怪。塔方向与核心方向共用流场算法，缓存按目标 id 与 navVersion 重建，阻路建筑仍须先被摧毁；塔消失时退回核心目标。
 - `VictoryMethod = survived | hiveDestroyed | signal` 直接用于 `outcome.reason` 和 `gameOver.reason`。三种胜利基础分分别为 1500、1750（1500 + hive 250）、2000（1500 + signal 500）；母巢和信号塔提前胜利均按完整剩余天数每昼夜 +50；每摧毁一座巢穴 +80、每名存活幸存者 +10、每座非路障建筑损失 -10，难度乘数不变。核心同 tick 被毁优先判负。
 
@@ -117,7 +117,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 `pending.target` 在卡片出现时已经确定，结构为 `{kind,tile,nestId,splitTile}`。选中目标选项后写入 `incidents.targets[]`，另有 `id/incidentId/title/createdTick/expiresTick/status/guardIds`。类型为 `rescue | nestSplit`；非适用实体 id 为 0，非分裂 `splitTile` 为 -1。地图显示 `status === 'active'` 的项；位置为 `tileCenter(state.map, target.tile)`，剩余秒数为 `max(0, expiresTick-state.tick)/TICKS_PER_SECOND`。完成/过期记录保留用于统计，不再显示为活动目标。`history[]` 记录实例、定义、出现/处理 tick、choiceId 和 automatic；`nextId` 供卡片与目标共用。`eventDays/northernDay/nextIncidentTick/lastIncidentDay` 为已确定的调度状态。
 
-输出事件为 `incidentRaised {incidentId}`、`incidentResolved {incidentId,choiceId,automatic,feedback}`、`incidentTargetResolved {targetId,status,text}`、`ruinFragment {index,text}`。目标接受选项在原文中没有即时反馈，所以 `feedback` 为 null，只在完成或超时输出原文。残页索引为 1–14；`fragmentIndex` 保存已经发出的段数，探索第 15 处及以后仍给普通奖励但不再发残页。新局从 0 开始。输出队列不是玩法状态，恢复存档不会重播历史消息。
+输出事件为 `incidentRaised {incidentId}`、`incidentResolved {incidentId,choiceId,automatic,feedback}`、`incidentTargetResolved {targetId,status,text}`、`ruinFragment {index,text}`。目标接受选项在原文中没有即时反馈，所以 `feedback` 为 null，只在完成或超时输出原文。残页索引为 1–8；`fragmentIndex` 保存已经发出的段数，探索第 9 处及以后仍给普通奖励但不再发残页。新局从 0 开始。输出队列不是玩法状态，恢复存档不会重播历史消息。
 
 **抽取。** 首次 incidents 阶段使用独立 `rng.incidents` 预排第 2–20 天，先均匀选定 9–11 次配额，再以随机顺序回溯选择事件日，约束连续事件日最多 2 天、连续空白日最多 3 天（第 1 天也计入初始空白连续长度）。结果保存为升序 `eventDays`，初始为空，只初始化一次；回溯对数量进行剪枝，没有随机重试次数上限，因此保证约束而不是概率满足。第 1 天无事件。正常完整对局按表产生 9–11 次；提前结束时只发生截至终局的事件。事件日白天第 5–15 秒（100–300 tick，含端点）均匀抽取时刻。池为空的异常状态跳过当天，不抛异常或反复重试。
 

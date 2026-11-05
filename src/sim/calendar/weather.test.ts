@@ -11,6 +11,7 @@ import { DAY_TICKS, DUSK_TICKS, CYCLE_TICKS, TOTAL_NIGHTS, TICKS_PER_SECOND, clo
 import { planNight, nightSystem } from '../combat/night';
 import { addBuilding, spawnSurvivor, enterBuilding } from '../world/entities';
 import { visionRadius } from '../world/fog';
+import { nextFloat } from '../rng';
 import type { NightType } from '../data/calendar';
 
 const ROWS = ['........................', '...CCC............NN....', '...CCC............NN....', '...CCC..................', '........................', '........................'];
@@ -68,12 +69,15 @@ describe('night types and broadcast', () => {
     g.state.clock.phase = 'dusk';
     expect(visionRadius(g, core)).toBe(core.vision);
   });
-  it.each(['calm', 'raid', 'rustStorm', 'denseFog', 'surge'] as const)('selects exact narrative lines deterministically for %s', (type) => {
+  it.each(['calm', 'raid', 'rustStorm', 'denseFog', 'surge'] as const)('broadcasts the one narrative line for %s, still drawing one calendar number', (type) => {
     const a = fixture(type), b = fixture(type);
+    const calendarAfterOneDraw = { ...a.state.rng.calendar };
+    nextFloat(calendarAfterOneDraw);
     nightSystem(a); nightSystem(b);
     expect(a.state.night.broadcast).toEqual(b.state.night.broadcast);
-    expect(RADIO_BROADCASTS[type]).toContain(a.state.night.broadcast!.text);
+    expect(RADIO_BROADCASTS[type]).toEqual([a.state.night.broadcast!.text]);
     expect(a.state.night.broadcast!.type).toBe(type);
+    expect(a.state.rng.calendar).toEqual(calendarAfterOneDraw);
   });
   it('uses the special final broadcast', () => {
     const g = fixture('surge', TOTAL_NIGHTS);
