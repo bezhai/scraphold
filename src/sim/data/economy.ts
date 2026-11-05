@@ -94,7 +94,7 @@ export const SURVIVOR_AI = {
   enemyClearance: 10,
   /** ...nor until no mutant has been seen that close for this many seconds (a mutant at the edge of sight comes and goes). */
   enemyCalmSeconds: 5,
-  /** A line's weight is 1, times up to (1 + shortageBoost) as its stock falls from target to 0, halved above glut. */
+  /** A line's weight is 1, times up to (1 + shortageBoost) as its stock falls from target to 0, halved above glut (food only while housing is full). */
   shortageBoost: 3,
   stock: {
     food: { target: 60, glut: 300 },

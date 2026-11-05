@@ -86,14 +86,17 @@ it('dispatches at most one squad per target even after all three die', () => {
   expect(ctx.turn.commands()).toEqual([]);
   expect(ctx.snap.soldiers.filter(s => memory.roles.get(s.id) === 'incident')).toHaveLength(0);
 });
-it('recalls incident squads before night and never redeploys them to the same target', () => {
+it('hands incident squads back to automatic control before night and never redeploys them to the same target', () => {
   const {
     g,
     memory
   } = targetGame();
   let ctx = context(g, memory);
   pursueIncident(ctx);
-  for (const s of ctx.snap.soldiers) if (memory.roles.get(s.id) === 'incident') {
+  for (const command of ctx.turn.commands()) expect(applyCommand(g, command).ok).toBe(true);
+  const crew = ctx.snap.soldiers.filter(s => memory.roles.get(s.id) === 'incident');
+  expect(crew).toHaveLength(3);
+  for (const s of crew) {
     s.x = 20;
     s.y = 20;
   }
@@ -101,14 +104,14 @@ it('recalls incident squads before night and never redeploys them to the same ta
   g.state.clock = clockAt(g.state.tick);
   ctx = context(g, memory);
   pursueIncident(ctx);
-  expect(ctx.turn.commands()).toContainEqual(expect.objectContaining({
-    type: 'move'
-  }));
+  expect(ctx.turn.commands()).toEqual([{ type: 'stop', unitIds: crew.map(s => s.id) }]);
+  expect(memory.incidentMission).toBeNull();
+  for (const s of crew) expect(memory.roles.get(s.id)).toBe('garrison');
   g.state.tick = DAY_TICKS;
   g.state.clock = clockAt(g.state.tick);
   ctx = context(g, memory);
   pursueIncident(ctx);
-  expect(ctx.turn.commands().every(c => c.type === 'move')).toBe(true);
+  expect(ctx.turn.commands()).toEqual([]);
 });
 it('plans ordinary commands against the paid incident state in the same turn', () => {
   const g = make();

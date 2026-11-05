@@ -6,7 +6,7 @@
  */
 import { preparationThreat, composeArmy, hubOrder, knowsOil, nearCore, needsHousing, threatShares } from './common';
 import type { BuildOrder, Context, Strategy } from './strategy';
-import { needsWorkplace, type WorkforceShares } from './workforce';
+import { needsWorkplace, type WorkplaceShares } from './workplaces';
 
 export interface EconomyFirstOptions {
   /** First day of the military phase. */
@@ -15,7 +15,7 @@ export interface EconomyFirstOptions {
 
 export function economyFirst({ switchDay }: EconomyFirstOptions = { switchDay: 6 }): Strategy {
   const military = (ctx: Context) => ctx.day >= switchDay;
-  const shares = (ctx: Context): WorkforceShares =>
+  const shares = (ctx: Context): WorkplaceShares =>
     military(ctx) ? { food: 0.42, scrap: 0.3, research: 0.18, fuel: 0.05, support: 0.05 } : { food: 0.45, scrap: 0.3, research: 0.18, support: 0.07 };
   const producers = (ctx: Context) => ctx.count('greenhouse') + ctx.count('salvageYard') + ctx.count('researchStation');
   return {
@@ -49,10 +49,8 @@ export function economyFirst({ switchDay }: EconomyFirstOptions = { switchDay: 6
       return { ...fighters, scout: ctx.day >= 3 && ctx.day <= switchDay + 2 ? 1 : 0 };
     },
     minWorkers: (ctx) => (military(ctx) ? Math.max(6, Math.floor(ctx.population * 0.4)) : Math.max(3, Math.floor(ctx.population * 0.55))),
-    workforce: shares,
+    workplaces: shares,
     reserve: () => ({}),
-    repairs: { crew: 2, below: 0.7 },
-    defense: { rallyDistance: 3, engageRadius: 9 },
     raids: { fromDay: switchDay + 2, homeGuard: 12, powerRatio: 1.6, hive: null },
     scouts: 1,
     promotion: () => null,

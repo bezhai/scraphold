@@ -175,3 +175,24 @@ it('sizes the raider army for the hive the nests no longer shield', () => {
   for (const n of ordinary) removeEntity(game, n);
   expect(strategy.army(context())).toEqual(shielded);
 });
+
+it('hands the raiders back to automatic control when the raid ends, instead of walking them home', () => {
+  const { game, ordinary, memory, context } = hiveWorld('raid-ends', 0);
+  const nest = ordinary[0]!;
+  const raiders = [0, 1, 2].map(k => spawnSoldier(game, 'rifleman', nest.x + 3, nest.y + k));
+  for (const s of raiders) {
+    s.control = 'player';
+    s.order = { type: 'attackMove', x: nest.x, y: nest.y };
+    memory.roles.set(s.id, 'raid');
+  }
+  // One raider's order already ended: the soldier AI has it, so it needs no command.
+  raiders[2]!.control = 'auto';
+  raiders[2]!.order = { type: 'idle' };
+  memory.raid = { targetId: nest.id, startPower: 3 };
+  removeEntity(game, nest);
+  const ctx = context();
+  raid(ctx, nestRaider());
+  expect(ctx.turn.commands()).toEqual([{ type: 'stop', unitIds: [raiders[0]!.id, raiders[1]!.id] }]);
+  expect(memory.raid).toBeNull();
+  for (const s of raiders) expect(memory.roles.get(s.id)).toBe('garrison');
+});

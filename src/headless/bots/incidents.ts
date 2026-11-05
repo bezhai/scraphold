@@ -1,5 +1,5 @@
 /** Select affordable outcomes while preserving a viable rescue squad and home guard. */
-import { powerOf, raidPowerOf, raidTargets } from './army';
+import { handBack, powerOf, raidPowerOf, raidTargets } from './army';
 import { distance } from './view';
 import { CYCLE_TICKS, DAY_TICKS, TICKS_PER_SECOND } from '../../sim/time';
 import { validateCommand, type Command, type Game, type Soldier } from '../../sim';
@@ -64,22 +64,11 @@ export function pursueIncident(ctx: Context): void {
     }
     const left = ctx.phase === 'night' ? 0 : (DAY_TICKS - game.state.tick % CYCLE_TICKS) / TICKS_PER_SECOND;
     const travel = Math.max(...crew.map(s => distance(s, ctx.core) / Math.max(s.motion.speed, 0.1)));
-    if (!target || left <= Math.max(8, travel + 4)) mission.returning = true;
-    if (mission.returning) {
-      const outside = crew.filter(s => distance(s, ctx.core) > 6);
-      for (const s of crew) if (!outside.includes(s)) memory.roles.set(s.id, 'garrison');
-      mission.unitIds = outside.map(s => s.id);
-      if (!outside.length) {
-        memory.incidentMission = null;
-        return;
-      }
-      const moving = outside.filter(s => s.order.type !== 'move' || s.motion.mode === 'stand');
-      if (moving.length) turn.issue({
-        type: 'move',
-        unitIds: moving.map(s => s.id),
-        x: ctx.core.x,
-        y: ctx.core.y + 3
-      });
+    if (!target || left <= Math.max(8, travel + 4)) {
+      // The soldier AI walks the crew home and takes it into the night's defence.
+      for (const s of crew) memory.roles.set(s.id, 'garrison');
+      handBack(ctx, crew);
+      memory.incidentMission = null;
       return;
     }
   } else {
@@ -99,8 +88,7 @@ export function pursueIncident(ctx: Context): void {
     memory.incidentAttempts.add(target.id);
     mission = {
       targetId: target.id,
-      unitIds: crew.map(s => s.id),
-      returning: false
+      unitIds: crew.map(s => s.id)
     };
     memory.incidentMission = mission;
     for (const s of crew) memory.roles.set(s.id, 'incident');

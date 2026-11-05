@@ -62,14 +62,6 @@ export function snapshot(game: Game): Snapshot {
   return out;
 }
 
-/**
- * Free for any job: idle on the map under automatic control (an idle survivor under player control
- * is still walking), or pulled out of a building by the bot and waiting for its orders.
- */
-export function isIdle(s: Survivor): boolean {
-  return s.insideId === 0 && (s.task.type === 'wait' || (s.task.type === 'idle' && s.control === 'auto'));
-}
-
 export function ofType(buildings: readonly Building[], type: BuildingType): Building[] {
   return buildings.filter((b) => b.type === type);
 }

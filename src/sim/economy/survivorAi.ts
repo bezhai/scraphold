@@ -19,7 +19,8 @@
  * - Everyone else works in production. The managed workforce is split between the lines (food,
  *   scrap, fuel, research while a research is selected, dispatch hubs) in proportion to weights:
  *   1 per line, times up to (1 + shortageBoost) as a stockpile falls below its target, halved
- *   above its glut level, and no line above the slots it has. Idle survivors join the line furthest
+ *   above its glut level (food only while housing is full, since the food surplus is what grows
+ *   the population), and no line above the slots it has. Idle survivors join the line furthest
  *   below its share, at its best-placed building. By day one worker per transferSeconds may move
  *   from the line furthest above its share to the one furthest below, once the two are transferGap
  *   workers apart: walking costs output, so small differences and wobbling stockpiles leave
@@ -35,6 +36,7 @@ import { FOG_VISIBLE, type Building, type EntityId, type GameState, type Point, 
 import { secondsToTicks } from '../time';
 import { edgeDistance, forEachInRadius } from '../world/spatial';
 import { buildingById } from './buildings';
+import { housingFull } from './population';
 import { placementBonusPct } from './production';
 import { assignTask, goIdle, workerSlots } from './workers';
 
@@ -267,17 +269,23 @@ function staffUpkeep(round: Round): void {
   }
 }
 
-/** Line weights from the stockpiles: shortage raises a line, glut halves it. */
+/**
+ * Line weights from the stockpiles: shortage raises a line, glut halves it. Food counts as glut only
+ * while housing is full: until then its surplus feeds the growth meter (population.ts), so a large
+ * stockpile is no reason to grow slower.
+ */
 function lineWeights(game: Game): Record<Line, number> {
   const { resources, expensePerDay, tech } = game.state.economy;
   const weights = zeroRecord(LINES);
   weights.research = tech.current !== null ? 1 : 0;
   weights.support = 1;
+  const growing = !housingFull(game);
   for (const r of STOCKED) {
     const { target, glut } = SURVIVOR_AI.stock[r];
     const upkeep = r === 'food' ? SURVIVOR_AI.upkeepDays * expensePerDay.food : 0;
     const shortage = Math.min(1, Math.max(0, (target + upkeep - resources[r]) / (target + upkeep)));
-    weights[r] = (1 + SURVIVOR_AI.shortageBoost * shortage) * (resources[r] > glut + upkeep ? 0.5 : 1);
+    const glutted = resources[r] > glut + upkeep && !(r === 'food' && growing);
+    weights[r] = (1 + SURVIVOR_AI.shortageBoost * shortage) * (glutted ? 0.5 : 1);
   }
   return weights;
 }

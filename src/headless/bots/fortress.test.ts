@@ -93,9 +93,9 @@ it('prepares fuel and rebuilds a missing well two nights before the second publi
   game.state.calendar.nights[4]!.type = 'surge';
   const strategy = fortress();
   game.state.calendar.nights[8]!.type = 'calm';
-  const ordinaryFuelShare = strategy.workforce(ctx).fuel!;
+  const ordinaryFuelShare = strategy.workplaces(ctx).fuel!;
   game.state.calendar.nights[8]!.type = 'surge';
-  expect(strategy.workforce(ctx).fuel).toBeGreaterThan(ordinaryFuelShare);
+  expect(strategy.workplaces(ctx).fuel).toBeGreaterThan(ordinaryFuelShare);
   expect(strategy.build(ctx)?.type).toBe('oilWell');
   expect(strategy.policies(ctx).slice(0, 2)).toContain('fuelRationing');
 });
@@ -110,7 +110,34 @@ it('does not divert early defense production into the second-surge fuel reserve 
   ctx.count = type => type === 'machineGunTower' ? 3 : 0;
   for (const night of game.state.calendar.nights) night.type = 'calm';
   const strategy = fortress();
-  const baseline = strategy.workforce(ctx).fuel;
+  const baseline = strategy.workplaces(ctx).fuel;
   game.state.calendar.nights[4]!.type = 'surge';
-  expect(strategy.workforce(ctx).fuel).toBe(baseline);
+  expect(strategy.workplaces(ctx).fuel).toBe(baseline);
+});
+
+it('rings the side facing the last forecast first, remembering it through the day', () => {
+  const game = createGame({ seed: 'fortress-ring-side', origin: 'scavengers', difficulty: 'normal' });
+  game.state.fog.fill(2);
+  game.state.economy.resources = { scrap: 1000, food: 1000, fuel: 100, research: 0 };
+  for (const [row, type] of (['greenhouse', 'salvageYard'] as const).entries()) {
+    for (let i = 0; i < 2; i++) addBuilding(game, type, 2 + 3 * i, 2 + 3 * row, { complete: true });
+  }
+  for (const night of game.state.calendar.nights) night.type = 'calm';
+  const core = game.state.entities.get(game.state.coreId)!;
+  const strategy = fortress();
+  const barricade = (directions: { direction: 'E' | 'N'; weight: number }[]) => {
+    const snap = snapshot(game);
+    const memory = createMemory();
+    const ctx = makeContext(game, snap, new Turn(game, snap, new Set()), memory, estimateThreat(game, snap, memory.sightings));
+    ctx.day = 7;
+    ctx.housingCap = 100;
+    ctx.count = type => type === 'barricade' ? 0 : type === 'machineGunTower' ? 2 : 3;
+    ctx.est.directions = directions;
+    const order = strategy.build(ctx);
+    if (order?.type !== 'barricade' || !('site' in order)) throw new Error(`expected a barricade site, got ${order?.type}`);
+    return order.site;
+  };
+  expect(barricade([{ direction: 'E', weight: 10 }]).tileX).toBeGreaterThan(core.x);
+  expect(barricade([]).tileX).toBeGreaterThan(core.x);
+  expect(barricade([{ direction: 'N', weight: 10 }]).tileY).toBeLessThan(core.y);
 });

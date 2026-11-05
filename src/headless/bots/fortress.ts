@@ -3,10 +3,10 @@
  * close around the core (each one reaches the core, so all of them fire at whatever attacks it),
  * a watchtower for exact forecasts, then a square ring of barricades around the core with a
  * three-tile gate in the middle of each side. Mutants detour to the gates and come in on the
- * lanes; boomers spend themselves on barricades, which survivors repair by day. A small garrison
- * of shield guards and riflemen holds inside the ring until the towers are up; fuel workers grow
- * with the towers. The fortification line adds tower damage, building hp, cheaper repairs and the
- * third policy slot.
+ * lanes; boomers spend themselves on barricades, which the survivor AI repairs by day. A small
+ * garrison of shield guards and riflemen, left to the soldier AI, holds the base until the towers
+ * are up; fuel workplaces grow with the towers. The fortification line adds tower damage,
+ * building hp, cheaper repairs and the third policy slot.
  *
  * Ring tiles that cannot take a barricade (wreckage, oil, ruins) stay open; impassable terrain is
  * part of the wall already. Production goes anywhere except the ring, the gates' lanes to the
@@ -19,7 +19,7 @@ import { inBounds, terrainAt } from '../../sim/map/grid';
 import { preparationThreat, composeArmy, knowsOil, needsHousing, threatShares } from './common';
 import { findSite, type Site, type SiteRules } from './sites';
 import type { BuildOrder, Context, Strategy } from './strategy';
-import { needsWorkplace, type WorkforceShares } from './workforce';
+import { needsWorkplace, type WorkplaceShares } from './workplaces';
 import { coreOf } from './view';
 
 export interface FortressOptions {
@@ -110,12 +110,24 @@ export function fortress({ ringGap }: FortressOptions = { ringGap: 3 }): Strateg
   const production = (ctx: Context, type: BuildingType) => away(ctx.game, type, { maxDistance: 11, touching: (t) => t === 'dispatchHub', score: (_x, _y, distance) => -distance });
   const close = (ctx: Context, type: BuildingType, maxDistance: number) => away(ctx.game, type, { maxDistance, score: (_x, _y, d) => -d });
 
+  /** Where the forecast attacks came from, weighted by threat; kept through the day, north before the first forecast. */
+  let heading: { x: number; y: number } = DIRECTION_VECTORS.N;
+  const facing = (ctx: Context) => {
+    let x = 0;
+    let y = 0;
+    for (const d of ctx.est.directions) {
+      x += DIRECTION_VECTORS[d.direction].x * d.weight;
+      y += DIRECTION_VECTORS[d.direction].y * d.weight;
+    }
+    if (x * x + y * y > 1e-12) heading = { x, y };
+    return heading;
+  };
+
   /** The next free ring tile, the side facing the heaviest forecast direction first. */
   const nextBarricade = (ctx: Context): BuildOrder | null => {
     const { game } = ctx;
     const core = ctx.core;
-    const rally = ctx.memory.rally;
-    const dir = rally ? { x: rally.x - core.x, y: rally.y - core.y } : DIRECTION_VECTORS.N;
+    const dir = facing(ctx);
     const occupied = new Set<number>();
     for (const b of ctx.snap.buildings) occupied.add(b.tileY * game.state.map.width + b.tileX);
     const free = layoutOf(game).ring.filter((t) => !occupied.has(t.tileY * game.state.map.width + t.tileX));
@@ -142,8 +154,8 @@ export function fortress({ ringGap }: FortressOptions = { ringGap: 3 }): Strateg
   const prepareFuel = (ctx: Context) => surgeSoon(ctx) && ctx.count('machineGunTower') >= 2 && ctx.game.state.calendar.nights.slice(0, ctx.day - 1).some(night => night.type === 'surge');
   const fuelTarget = (ctx: Context) => prepareFuel(ctx) ? 60 + ctx.count('machineGunTower') * 5 : 20 + ctx.count('machineGunTower') * 5;
 
-  /** Fuel workers grow with the towers they keep firing. */
-  const shares = (ctx: Context): WorkforceShares => {
+  /** Fuel workplaces grow with the towers they keep firing. */
+  const shares = (ctx: Context): WorkplaceShares => {
     const towers = ctx.count('machineGunTower');
     const fuelLow = ctx.game.state.economy.resources.fuel < fuelTarget(ctx);
     return { food: 0.44, scrap: 0.4, research: 0.12, fuel: prepareFuel(ctx) && fuelLow ? 0.25 : Math.min(0.18, 0.04 + towers * 0.012) * (fuelLow ? 1.5 : 1) };
@@ -219,10 +231,8 @@ export function fortress({ ringGap }: FortressOptions = { ringGap: 3 }): Strateg
     },
     // Preserve enough workers to replace losses and keep the defenses supplied.
     minWorkers: (ctx) => Math.max(5, Math.floor(ctx.population * 0.45)),
-    workforce: shares,
+    workplaces: shares,
     reserve: (ctx) => (wantsTower(ctx) ? BUILDINGS.machineGunTower.cost : {}),
-    repairs: { crew: 4, below: 0.95 },
-    defense: { rallyDistance: 2.5, engageRadius: 12 },
     raids: null,
     scouts: 1,
     promotion: () => null,

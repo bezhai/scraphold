@@ -1,15 +1,16 @@
 /**
- * Running the base for a bot (Task 5): research, policies, construction, training, repairs and
- * ruin visits (staffing is in workforce.ts). The strategy (strategy.ts) decides what it wants; this file turns the
- * wishes into valid commands through the Turn's bookkeeping.
+ * Running the base for a bot (Task 5, v3 Task 4): research, policies, construction, training and
+ * ruin visits. The strategy (strategy.ts) decides what it wants; this file turns the wishes into
+ * valid commands through the Turn's bookkeeping. Staffing, repairs and storm shelter are the
+ * survivor AI's (sim economy/survivorAi.ts); it also takes researchers off once nothing is being
+ * researched.
  */
-import { buildingCost, trainingCost, usablePolicySlots, validateCommand, type Building } from '../../sim';
+import { buildingCost, trainingCost, usablePolicySlots, validateCommand } from '../../sim';
 import { SOLDIERS, SOLDIER_TYPES, type SoldierType } from '../../sim/data/combat';
 import { TECHS, TRAINING } from '../../sim/data/economy';
 import { findSite } from './sites';
 import type { Context, Strategy } from './strategy';
 import { distance, knownRuins, ruinPoint } from './view';
-import { adjustToStock, expendableWorkplace } from './workforce';
 
 export function chooseResearch(ctx: Context, strategy: Strategy): void {
   const { tech } = ctx.game.state.economy;
@@ -21,30 +22,6 @@ export function chooseResearch(ctx: Context, strategy: Strategy): void {
     ctx.turn.issue({ type: 'setResearch', tech: t });
     return;
   }
-}
-
-/** Release finished research staffing before another decision reallocates these survivors. */
-export function releaseResearchers(ctx: Context): boolean {
-  if (ctx.researchPending) return false;
-  let released = false;
-  const stations = new Set(ctx.snap.buildings.filter(b => b.type === 'researchStation').map(b => b.id));
-  for (const building of ctx.snap.buildings) {
-    if (!stations.has(building.id) || building.workers.length === 0) continue;
-    const command = { type: 'unassignWork' as const, buildingId: building.id, count: building.workers.length };
-    if (validateCommand(ctx.game, command).ok) {
-      ctx.turn.issue(command);
-      released = true;
-    }
-  }
-  const incoming = ctx.snap.survivors.filter(s => s.insideId === 0 && s.task.type === 'work' && stations.has(s.task.buildingId));
-  if (incoming.length) {
-    const command = { type: 'stop' as const, unitIds: incoming.map(s => s.id) };
-    if (validateCommand(ctx.game, command).ok) {
-      ctx.turn.issue(command);
-      released = true;
-    }
-  }
-  return released;
 }
 
 export function choosePolicies(ctx: Context, strategy: Strategy): void {
@@ -106,8 +83,8 @@ function queued(ctx: Context, unit: SoldierType): number {
 }
 
 /**
- * Trains toward the strategy's army, largest relative shortfall first. Recruits come from idle
- * survivors, then from workers while the workforce stays above strategy.minWorkers.
+ * Trains toward the strategy's army, largest relative shortfall first, while more than
+ * strategy.minWorkers survivors under automatic control would be left to work.
  */
 export function train(ctx: Context, strategy: Strategy): void {
   const { game, turn, snap } = ctx;
@@ -115,7 +92,6 @@ export function train(ctx: Context, strategy: Strategy): void {
   const have = new Map<SoldierType, number>();
   for (const t of SOLDIER_TYPES) have.set(t, queued(ctx, t));
   for (const s of snap.soldiers) have.set(s.type, (have.get(s.type) ?? 0) + 1);
-  let workforce = ctx.workers;
   const minWorkers = strategy.minWorkers(ctx);
   // Never spend the food the soldiers eat at the next dusk (hungry soldiers fight much worse),
   // nor what the strategy saves for its next buildings unless the army is far behind its wish.
@@ -124,7 +100,7 @@ export function train(ctx: Context, strategy: Strategy): void {
   for (let round = 0; round < 6; round++) {
     // New survivors must first replace missing workers; otherwise repeated recruitment
     // can keep a damaged economy permanently below the strategy's workforce floor.
-    if (workforce + turn.spareIdle <= minWorkers) return;
+    if (turn.spareSurvivors <= minWorkers) return;
     let best: SoldierType | null = null;
     let bestGap = 0;
     for (const t of SOLDIER_TYPES) {
@@ -143,37 +119,14 @@ export function train(ctx: Context, strategy: Strategy): void {
       have.set(best, want[best] ?? 0);
       continue;
     }
-    let freeWorker: Building | null = null;
-    if (turn.spareIdle <= 0) {
-      if (workforce <= minWorkers) return;
-      freeWorker = expendableWorkplace(ctx, adjustToStock(ctx, strategy.workforce(ctx)));
-      if (!freeWorker) return;
-      workforce--;
-    }
-    turn.train(at, best, freeWorker);
+    turn.train(at, best);
     upkeepReserve += SOLDIERS[best].upkeepFoodPerDay;
     ctx.queuedHere.set(at.id, (ctx.queuedHere.get(at.id) ?? 0) + 1);
     have.set(best, (have.get(best) ?? 0) + 1);
   }
 }
 
-/** Survivors from the Turn (idle first) patch damaged buildings by day; repairers already on the job keep going. */
-export function repair(ctx: Context, maxRepairers: number, minHpShare: number): void {
-  const { turn, snap, game } = ctx;
-  if (game.state.economy.resources.scrap < 20) return;
-  let busy = snap.survivors.filter((s) => s.task.type === 'repair').length;
-  const damaged = snap.buildings.filter((b) => b.construction === null && b.hp < b.maxHp * minHpShare).sort((a, b) => Number(b.type === 'core') - Number(a.type === 'core') || Number(a.type === 'barricade') - Number(b.type === 'barricade') || a.hp / a.maxHp - b.hp / b.maxHp);
-  for (const b of damaged) {
-    if (busy >= maxRepairers) return;
-    if (snap.survivors.some((s) => s.task.type === 'repair' && s.task.buildingId === b.id)) continue;
-    const s = turn.takeSurvivor(b.x, b.y);
-    if (!s) return;
-    turn.issue({ type: 'repair', unitIds: [s.id], buildingId: b.id });
-    busy++;
-  }
-}
-
-/** Sends a survivor from the Turn (idle first) to the nearest known ruin within reach, by day, away from known nests. */
+/** Sends an automatic survivor (idle first) to the nearest known ruin within reach, by day, away from known nests. */
 export function visitRuins(ctx: Context, maxDistance: number): void {
   const { game, turn, snap, memory } = ctx;
   if (game.state.clock.phase !== 'day') return;

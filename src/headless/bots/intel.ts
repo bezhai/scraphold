@@ -5,9 +5,9 @@
  * The real night plan in the state is never read.
  */
 import { MUTANTS, MUTANT_TYPES, NIGHTS, type MutantType } from '../../sim/data/combat';
-import { DIRECTION_VECTORS, type Direction } from '../../sim/data/map';
-import { expectedThreat, nightType, nestNightThreat, edgeNightBudget, type Game, type Point } from '../../sim';
-import { coreOf, type Snapshot } from './view';
+import type { Direction } from '../../sim/data/map';
+import { expectedThreat, nightType, nestNightThreat, edgeNightBudget, type Game } from '../../sim';
+import type { Snapshot } from './view';
 
 export type Counts = Record<MutantType, number>;
 
@@ -98,19 +98,4 @@ export function estimateThreat(game: Game, snap: Snapshot, s: Sightings): Threat
   }
   const threat = precise ? Math.max(threatOf(precise), forecastThreat) : Math.max(prior, forecastThreat);
   return { night, threat, mix, boss, directions };
-}
-
-/** Where the garrison waits for the night: toward the heaviest forecast directions. */
-export function rallyPoint(game: Game, est: ThreatEstimate, distanceFromCore: number): Point {
-  const core = coreOf(game);
-  let vx = 0;
-  let vy = 0;
-  for (const d of est.directions) {
-    const v = DIRECTION_VECTORS[d.direction];
-    vx += v.x * d.weight;
-    vy += v.y * d.weight;
-  }
-  const len = Math.sqrt(vx * vx + vy * vy);
-  if (len < 1e-6) return { x: core.x, y: core.y + core.size / 2 + 1.5 };
-  return { x: core.x + (vx / len) * distanceFromCore, y: core.y + (vy / len) * distanceFromCore };
 }

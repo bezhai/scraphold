@@ -84,6 +84,23 @@ describe('survivor manager: production', () => {
     }
   });
 
+  it('keeps food workers above the glut level while housing has room, since the food surplus grows the population', () => {
+    const onFood = (shack: boolean) => {
+      const game = createTestGame(ROWS);
+      const farms = [addBuilding(game, 'greenhouse', 14, 1, { complete: true }), addBuilding(game, 'greenhouse', 17, 1, { complete: true })];
+      addBuilding(game, 'salvageYard', 14, 8, { complete: true });
+      addBuilding(game, 'salvageYard', 17, 8, { complete: true });
+      if (shack) addBuilding(game, 'shack', 24, 4, { complete: true });
+      // The core houses six: without the shack these six fill the housing.
+      survivors(game, 6);
+      stock(game, { food: SURVIVOR_AI.stock.food.glut * 10, scrap: SURVIVOR_AI.stock.scrap.target });
+      stepSeconds(game, 1);
+      return farms.reduce((n, b) => n + staff(game, b).length, 0);
+    };
+    expect(onFood(true)).toBe(3);
+    expect(onFood(false)).toBe(2);
+  });
+
   it('moves workers toward the line that runs short, one at a time and only by day', () => {
     const game = createTestGame(ROWS);
     const farm = addBuilding(game, 'greenhouse', 14, 1, { complete: true });

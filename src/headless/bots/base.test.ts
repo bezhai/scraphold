@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, type Game } from '../../sim';
+import type { Game } from '../../sim';
 import { createTestGame } from '../../sim/testing';
 import { addBuilding, enterBuilding, spawnSoldier, spawnSurvivor } from '../../sim/world/entities';
 import { SPECIAL_RUINS } from '../../sim/data/ruins';
-import { train, visitRuins, repair } from './base';
+import { train, visitRuins } from './base';
 import { estimateThreat } from './intel';
 import { createMemory, makeContext, type Context, type Strategy } from './strategy';
 import { Turn } from './turn';
@@ -19,10 +19,8 @@ const saver: Strategy = {
   build: () => null,
   army: () => ({ rifleman: 4 }),
   minWorkers: () => 0,
-  workforce: () => ({}),
+  workplaces: () => ({}),
   reserve: () => ({ scrap: 1000 }),
-  repairs: { crew: 0, below: 0 },
-  defense: { rallyDistance: 3, engageRadius: 5 },
   raids: null,
   scouts: 0,
   promotion: () => null,
@@ -73,7 +71,7 @@ describe('special ruin visits', () => {
   });
 });
 
-describe('survivors the built-in manager keeps busy', () => {
+describe('survivors the survivor AI keeps busy', () => {
   const RUIN_ROWS = ['..............', '............r.', '..............', '....CCC.......', '....CCC.......', '....CCC.......', '..............'];
 
   it('sends an auto survivor helping a site to a ruin when nobody is idle, never one the player commands', () => {
@@ -104,32 +102,6 @@ describe('survivors the built-in manager keeps busy', () => {
     expect(ctx.turn.commands()).toEqual([{ type: 'move', unitIds: [worker.id], x: 12.5, y: 1.5 }]);
   });
 
-  it('hands out survivors it pulled out of a building, who wait for its orders', () => {
-    const game = createTestGame(RUIN_ROWS);
-    const waiting = spawnSurvivor(game, 8, 6);
-    waiting.task = { type: 'wait' };
-    waiting.control = 'player';
-    const ctx = contextOf(game);
-    visitRuins(ctx, 30);
-    expect(ctx.turn.commands()).toEqual([{ type: 'move', unitIds: [waiting.id], x: 12.5, y: 1.5 }]);
-  });
-
-  it('frees a worker it assigned so that training has a recruit', () => {
-    const game = withBarracks(0);
-    const farm = addBuilding(game, 'greenhouse', 4, 0, { complete: true });
-    for (const s of [...game.state.entities.values()].filter((e) => e.kind === 'survivor')) {
-      if (s.kind !== 'survivor') continue;
-      enterBuilding(game, s, farm);
-      s.task = { type: 'work', buildingId: farm.id };
-      s.control = 'player';
-    }
-    const ctx = contextOf(game);
-    train(ctx, saver);
-    const orders = ctx.turn.commands();
-    expect(orders.some((c) => c.type === 'train')).toBe(true);
-    for (const c of orders) expect(applyCommand(game, c)).toEqual({ ok: true });
-  });
-
   it('does not hand out an idle survivor walking under a player order', () => {
     const game = createTestGame(RUIN_ROWS);
     const walker = spawnSurvivor(game, 8, 6);
@@ -140,21 +112,9 @@ describe('survivors the built-in manager keeps busy', () => {
   });
 });
 
-it('repairs the damaged core before expendable barricades', () => {
-  const game = createTestGame(ROWS);
-  const core = game.state.entities.get(game.state.coreId)!;
-  core.hp = core.maxHp * .8;
-  const wall = addBuilding(game, 'barricade', 1, 1, { complete: true });
-  wall.hp = 1;
-  spawnSurvivor(game, 8, 6);
-  const ctx = contextOf(game);
-  repair(ctx, 1, .95);
-  expect(ctx.turn.commands().find(command => command.type === 'repair')).toMatchObject({ buildingId: core.id });
-});
-
-it('keeps idle recruits available to rebuild the minimum workforce after losses', () => {
+it('keeps enough survivors out of the army to rebuild the minimum workforce after losses', () => {
   const ctx = contextOf(withBarracks(0));
   train(ctx, { ...saver, minWorkers: () => 2 });
   expect(trainOrders(ctx)).toHaveLength(1);
-  expect(ctx.turn.spareIdle).toBe(2);
+  expect(ctx.turn.spareSurvivors).toBe(2);
 });

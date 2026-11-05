@@ -10,10 +10,10 @@
 import { guardStrength, hiveAssaultPower } from './army';
 import { preparationThreat, composeArmy, knowsOil, nearCore, needsHousing, threatShares } from './common';
 import type { BuildOrder, Context, Strategy } from './strategy';
-import { needsWorkplace, type WorkforceShares } from './workforce';
+import { needsWorkplace, type WorkplaceShares } from './workplaces';
 
 export function nestRaider(): Strategy {
-  const shares = (ctx: Context): WorkforceShares =>
+  const shares = (ctx: Context): WorkplaceShares =>
     ctx.researched('fuelPower') ? { food: 0.42, scrap: 0.3, research: 0.1, fuel: 0.18 } : { food: 0.45, scrap: 0.35, research: 0.12, fuel: 0.08 };
   return {
     name: 'raider',
@@ -46,11 +46,9 @@ export function nestRaider(): Strategy {
       return { ...fighters, scout: 2 };
     },
     minWorkers: (ctx) => Math.max(4, Math.floor(ctx.population * 0.35)),
-    workforce: shares,
+    workplaces: shares,
     reserve: () => ({}),
-    repairs: { crew: 1, below: 0.6 },
-    defense: { rallyDistance: 3, engageRadius: 10 },
-    raids: { fromDay: 2, homeGuard: 3, powerRatio: 1.0, hive: { fromDay: 8, minPower: 0, homeGuard: 8 } },
+    raids: { fromDay: 2, homeGuard: 3, powerRatio: 1.0, hive: { fromDay: 8, minPower: 0, homeGuard: 6 } },
     scouts: 2,
     promotion: () => null,
   };

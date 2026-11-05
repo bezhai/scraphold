@@ -1,21 +1,27 @@
-import { chooseIncident, pursueIncident } from './incidents';
 /**
- * A strategy as a runHeadless controller (Task 5). The bot decides every DECISION_TICKS ticks
- * (half a second), in a fixed order: promotions, research, policies, soldiers (roles, scouts,
- * raids, defense), construction and training, then the named survivor jobs (repairs, ruin visits,
- * staffing, moving workers between workplaces). Whichever of construction and training goes
- * first gets the resources: training at night or when the army is well short of the strategy's
- * wish, construction otherwise. Training reserves its recruits before survivors are handed out.
+ * A strategy as a runHeadless controller (Task 5, v3 Task 4). The bot decides every
+ * DECISION_TICKS ticks (half a second), in a fixed order: the pending incident, promotions,
+ * research, policies, soldier roles, incident missions, scouts, raids, the strategy's own project
+ * (the signal tower), then construction and training and ruin visits. Whichever of construction
+ * and training goes first gets the resources: training at night or when the army is well short of
+ * the strategy's wish, construction otherwise. In a rust storm's dusk and night it only builds.
+ *
+ * Everything else is left to the built-in AI, as for a player who gives no orders: survivors under
+ * automatic control are staffed, sent to repair and sheltered by the survivor AI, and soldiers
+ * the bot has no errand for (the garrison) defend the base under the soldier AI. The bot's own
+ * orders (raids, scouting, incident missions, the tower escort, ruin visits) put the units under
+ * player control; when an errand ends the bot hands its units back with stop, or the order's end
+ * does (sim world/control.ts).
  */
 import { applyCommand, serializeGame, restoreGame, nightType } from '../../sim';
 import type { Controller } from '../run';
-import { assignRoles, choosePromotions, defend, raid, scout } from './army';
-import { armyBehind, choosePolicies, chooseResearch, construct, releaseResearchers, repair, train, visitRuins } from './base';
+import { assignRoles, choosePromotions, raid, scout } from './army';
+import { armyBehind, choosePolicies, chooseResearch, construct, train, visitRuins } from './base';
+import { chooseIncident, pursueIncident } from './incidents';
 import { estimateThreat, recordSightings } from './intel';
 import { createMemory, makeContext, type Context, type Strategy } from './strategy';
 import { Turn } from './turn';
 import { snapshot } from './view';
-import { adjustToStock, rebalance, staff, shelterWorkers } from './workforce';
 
 export const DECISION_TICKS = 10;
 
@@ -40,17 +46,14 @@ export function createBot(strategy: Strategy, project?: (ctx: Context) => void):
     const ctx = makeContext(game, snap, turn, memory, estimateThreat(game, snap, memory.sightings));
     choosePromotions(ctx, strategy);
     chooseResearch(ctx, strategy);
-    if (releaseResearchers(ctx)) return finish();
     choosePolicies(ctx, strategy);
     assignRoles(ctx, strategy);
     pursueIncident(ctx);
     scout(ctx);
     raid(ctx, strategy);
-    defend(ctx, strategy);
     project?.(ctx);
     if (ctx.phase !== 'day' && nightType(game.state) === 'rustStorm') {
       construct(ctx, strategy);
-      shelterWorkers(ctx);
       return finish();
     }
     if (armyBehind(ctx, strategy) || ctx.phase === 'night') {
@@ -60,11 +63,7 @@ export function createBot(strategy: Strategy, project?: (ctx: Context) => void):
       construct(ctx, strategy);
       train(ctx, strategy);
     }
-    if (ctx.phase !== 'night') repair(ctx, strategy.repairs.crew, strategy.repairs.below);
     visitRuins(ctx, RUIN_REACH);
-    const shares = adjustToStock(ctx, strategy.workforce(ctx));
-    staff(ctx, shares);
-    rebalance(ctx, shares);
     return finish();
   };
 }

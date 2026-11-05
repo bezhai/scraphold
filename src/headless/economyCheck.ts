@@ -4,11 +4,13 @@
  *
  *   pnpm exec tsx src/headless/economyCheck.ts [--seed S] [--days N]
  *
- * - passive: the scavengers' starting salvage yard gets 3 workers and one shack is built; nothing
- *   else. Day-over-day stockpile changes must equal the per-day yields computed here from
- *   data/economy.ts, and births must follow the growth threshold.
+ * - passive: the scavengers' starting salvage yard gets 3 workers (assigned by the player, so the
+ *   survivor AI leaves them there) and one shack is built; nothing else. The yard is the only
+ *   workplace, so the other survivors only help build the shack. Day-over-day stockpile changes
+ *   must equal the per-day yields computed here from data/economy.ts, and births must follow the
+ *   growth threshold.
  * - builder: a fixed build order (greenhouses on fertile soil, shacks, research stations, salvage
- *   yards), every idle survivor put to work, research and policies chosen in a fixed order.
+ *   yards), research and policies chosen in a fixed order; the survivor AI puts everyone to work.
  *
  * Expectations are computed from the data tables and map terrain only, not from simulation
  * helpers, so they are an independent check of the production and growth rules.
@@ -112,20 +114,6 @@ function idleSurvivors(game: Game): Survivor[] {
   return entities(game).filter((e): e is Survivor => e.kind === 'survivor' && e.insideId === 0 && e.task.type === 'idle');
 }
 
-/** Workplaces with free slots (ignoring survivors on their way), in the given type priority. */
-function freeWorkplaces(game: Game, priority: readonly BuildingType[]): Building[] {
-  const out: Building[] = [];
-  for (const type of priority) {
-    for (const b of buildings(game)) {
-      if (b.type !== type || b.construction !== null) continue;
-      const slots = BUILDINGS[type].workerSlots + game.modifiers.building[type].workerSlotsAdd;
-      const coming = entities(game).filter((e) => e.kind === 'survivor' && e.insideId === 0 && e.task.type === 'work' && e.task.buildingId === b.id).length;
-      if (b.workers.length + coming < slots) out.push(b);
-    }
-  }
-  return out;
-}
-
 function recorder(days: DaySnapshot[], inner: Controller): Controller {
   return (game, events) => {
     // Before the first tick of a new day: state.clock is still the night of the day that ended.
@@ -198,16 +186,6 @@ function builderController(): Controller {
         const cmd: Command = { type: 'placeBuilding', building: type, tileX: site.x, tileY: site.y };
         if (applyCommand(game, cmd).ok) next++;
       }
-    }
-    const foodTight = economy.incomePerDay.food - economy.expensePerDay.food < 60;
-    const priority: BuildingType[] = foodTight
-      ? ['greenhouse', 'salvageYard', 'researchStation', 'dispatchHub']
-      : ['researchStation', 'salvageYard', 'greenhouse', 'dispatchHub'];
-    const idle = idleSurvivors(game);
-    for (const b of freeWorkplaces(game, priority)) {
-      const s = idle.shift();
-      if (!s) break;
-      cmds.push({ type: 'assignWork', unitIds: [s.id], buildingId: b.id });
     }
     return cmds;
   };
@@ -288,7 +266,7 @@ function main(): void {
 
   const builderRows: DaySnapshot[] = [];
   const builderSummary = runHeadless({ seed, origin: 'scavengers', difficulty: 'normal', days, controller: recorder(builderRows, builderController()) });
-  printTable('builder: fixed build order, everyone at work', builderRows);
+  printTable('builder: fixed build order, the survivor AI staffs', builderRows);
   console.log(
     `  births=${builderSummary.stats.survivorsBorn} survivors=${builderSummary.units.survivors} working=${builderSummary.units.survivorsWorking} buildings=${JSON.stringify(builderSummary.buildings)}`,
   );

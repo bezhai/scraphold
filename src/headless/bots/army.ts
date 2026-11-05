@@ -1,9 +1,9 @@
 /**
- * Commanding soldiers for a bot (Task 5): roles (garrison, raid, scout), exploring with scouts,
- * daytime nest raids, and defending the core.
+ * Commanding soldiers for a bot (Task 5, v3 Task 4): roles (garrison, raid, scout), exploring with
+ * scouts, and daytime nest raids. The garrison gets no orders: the soldier AI (sim
+ * combat/soldierAi.ts) defends the base with it, and soldiers back from an errand are handed to
+ * it with stop.
  *
- * Defense: the garrison waits at a rally point toward the forecast directions and attack-moves at
- * the visible mutant nearest to the core whenever one is inside the strategy's engage radius.
  * Raids: by day a strike force (everything above the home guard) attack-moves to a discovered
  * ordinary nest when it can defeat the guards and return before night. Ordinary nests come before
  * the hive: each one standing shields the hive (sim hiveShield). A hive siege evaluates guard
@@ -11,10 +11,9 @@
  * shield the ordinary nests left give it (the count the objectives card shows), keeps a larger
  * home garrison, and persists across nights.
  */
-import { hiveDamageReduction, nightType, ordinaryNestsLeft, type Game, type Mutant, type Nest, type Point, type Soldier } from '../../sim';
+import { hiveDamageReduction, nightType, ordinaryNestsLeft, type Game, type Nest, type Point, type Soldier } from '../../sim';
 import { HIVE, NEST, SOLDIERS, type SoldierType } from '../../sim/data/combat';
 import { TICKS_PER_SECOND, DAY_SECONDS, NIGHT_SECONDS } from '../../sim/time';
-import { rallyPoint } from './intel';
 import type { Context, Strategy } from './strategy';
 import { distance, isExploredTile } from './view';
 
@@ -81,7 +80,6 @@ export function raidPowerOf(soldiers: readonly Soldier[]): RaidPower {
 /** A raid may get home this long after nightfall: night groups need longer to reach the core. */
 const RAID_HOME_GRACE_SECONDS = 10;
 
-const RE_ORDER_TICKS = 20;
 const SCOUT_WAYPOINT_STEP = 6;
 const SCOUT_NEST_BERTH = 10;
 
@@ -166,21 +164,26 @@ function nextWaypoint(ctx: Context, from: Point, taken: readonly Point[]): Point
   return best;
 }
 
-/** Scouts explore by day (forced moves, they avoid fights) and come home for the night. */
+/** Hands soldiers still on a bot order back to the soldier AI. */
+export function handBack(ctx: Context, soldiers: readonly Soldier[]): void {
+  const ids = soldiers.filter((s) => s.control === 'player').map((s) => s.id);
+  if (ids.length > 0) ctx.turn.issue({ type: 'stop', unitIds: ids });
+}
+
+/** Scouts explore by day (forced moves, they avoid fights); for the night the soldier AI brings them home. */
 export function scout(ctx: Context): void {
   const { memory, turn, game } = ctx;
   const scouts = byRole(ctx, 'scout');
-  const night = secondsToNight(game) < 8;
+  if (secondsToNight(game) < 8) {
+    memory.scoutGoals.clear();
+    handBack(ctx, scouts);
+    return;
+  }
   const goals: Point[] = [];
   for (const s of scouts) {
-    if (night) {
-      memory.scoutGoals.delete(s.id);
-      if (distance(s, ctx.core) > 6 && s.motion.mode !== 'path') turn.issue({ type: 'move', unitIds: [s.id], x: ctx.core.x, y: ctx.core.y + 3 });
-      continue;
-    }
     let goal = memory.scoutGoals.get(s.id);
     const reached = goal && (distance(s, goal) < 2 || isExploredTile(game, Math.floor(goal.y) * game.state.map.width + Math.floor(goal.x)));
-    if (!goal || reached || s.motion.mode === 'stand') {
+    if (!goal || reached || s.motion.mode === 'stand' || s.control === 'auto') {
       const next = nextWaypoint(ctx, s, goals);
       if (!next) {
         memory.roles.set(s.id, 'garrison');
@@ -199,7 +202,7 @@ function endRaid(ctx: Context): void {
   const raiders = byRole(ctx, 'raid');
   for (const s of raiders) ctx.memory.roles.set(s.id, 'garrison');
   ctx.memory.raid = null;
-  if (raiders.length > 0) ctx.turn.issue({ type: 'move', unitIds: raiders.map((s) => s.id), x: ctx.core.x, y: ctx.core.y + 3 });
+  handBack(ctx, raiders);
 }
 
 function canOvercome(ctx: Context, nest: Nest, plan: NonNullable<Strategy['raids']>, power: RaidPower): boolean {
@@ -258,41 +261,4 @@ export function raid(ctx: Context, strategy: Strategy): void {
     turn.issue({ type: 'attackMove', unitIds: strike.map((s) => s.id), x: n.x, y: n.y });
     return;
   }
-}
-
-function threatNearCore(ctx: Context, radius: number): Mutant | null {
-  let best: Mutant | null = null;
-  let bestD = Infinity;
-  for (const m of ctx.snap.visibleMutants) {
-    const d = distance(m, ctx.core);
-    if (d <= radius && d < bestD) {
-      best = m;
-      bestD = d;
-    }
-  }
-  return best;
-}
-
-/** Garrison: fight what comes near the core, otherwise wait at the rally point. */
-export function defend(ctx: Context, strategy: Strategy): void {
-  const { memory, turn, game } = ctx;
-  const garrison = byRole(ctx, 'garrison');
-  if (garrison.length === 0) return;
-  const tick = game.state.tick;
-  const last = memory.garrisonOrder;
-  const send = (p: Point) => {
-    if (last && distance(last, p) < 2.5 && tick - last.tick < RE_ORDER_TICKS * 6) return;
-    if (last && tick - last.tick < RE_ORDER_TICKS) return;
-    memory.garrisonOrder = { x: p.x, y: p.y, tick };
-    turn.issue({ type: 'attackMove', unitIds: garrison.map((s) => s.id), x: p.x, y: p.y });
-  };
-  const threat = threatNearCore(ctx, strategy.defense.engageRadius);
-  if (threat) {
-    send(threat);
-    return;
-  }
-  if (ctx.phase !== 'day' || !memory.rally) memory.rally = rallyPoint(game, ctx.est, strategy.defense.rallyDistance);
-  const rally = memory.rally;
-  const c = centroid(garrison);
-  if (distance(c, rally) > 3 || (last && distance(last, rally) > 2.5)) send(rally);
 }

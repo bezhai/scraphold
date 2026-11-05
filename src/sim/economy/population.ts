@@ -47,6 +47,11 @@ export function housingCapacity(game: Game): number {
   return cap;
 }
 
+/** No room for another birth: everyone housed fills the housing of the finished buildings. */
+export function housingFull(game: Game): boolean {
+  return populationCount(game.state) >= housingCapacity(game);
+}
+
 /** Food all current soldiers eat per day after soldierUpkeepPct. */
 export function dailyUpkeep(game: Game): number {
   let food = 0;
@@ -86,7 +91,7 @@ export function populationSystem(game: Game): void {
   if (surplus > 0) growth.progress += (surplus / CYCLE_TICKS) * GROWTH.surplusShare * Math.max(0, 1 + game.modifiers.global.growthPct);
   growth.threshold = growthThreshold(game.state);
   if (growth.progress < growth.threshold) return;
-  if (populationCount(game.state) >= economy.housingCap) {
+  if (housingFull(game)) {
     growth.progress = growth.threshold;
     return;
   }

@@ -1,29 +1,26 @@
 /**
- * One bot decision (Task 5): the commands it issues and a local copy of what they use up.
+ * One bot decision (Task 5, v3 Task 4): the commands it issues and a local copy of what they use up.
  *
  * The runner applies a controller's commands in order after it returns, so a bot cannot watch its
  * own commands take effect within the decision. Turn keeps the bookkeeping instead: resources are
- * charged as commands are issued, idle survivors are handed out one by one, and recruits for
- * training are counted separately (training takes whichever idle survivor is nearest, so those
- * commands are issued last, after every command that names a survivor). The built-in survivor
- * manager puts idle survivors to work as well; once nobody is idle, a named job takes one the
- * manager keeps busy (working, helping a site, repairing), whom the command pulls off that job.
+ * charged as commands are issued, and the survivors under automatic control are handed out one by
+ * one. Those are the only survivors a bot names: the survivor AI keeps them busy (working, helping
+ * a site, repairing), so an errand (a ruin visit) takes the nearest one, idle ones first, and the
+ * command pulls it off its job. Training takes whichever automatic survivor is nearest to the
+ * barracks (sim nearestAutoSurvivor), so the bot only counts recruits, and training commands go
+ * last, after every command that names a survivor.
  */
 import { buildingCost, trainingCost, type Building, type Command, type Game, type Survivor } from '../../sim';
 import type { SoldierType } from '../../sim/data/combat';
 import { RESOURCES, type BuildingType, type Resource, type ResourceAmounts } from '../../sim/data/economy';
-import { isIdle, type Snapshot } from './view';
+import type { Snapshot } from './view';
 
 export class Turn {
   readonly resources: Record<Resource, number>;
-  /** Idle survivors not yet given a job in this decision. */
-  readonly idle: Survivor[];
-  /** Survivors under automatic control on a job, not yet given another in this decision. */
-  private readonly busy: Survivor[];
+  /** Survivors under automatic control not named or promised to training yet in this decision. */
+  private readonly free: Survivor[];
   private readonly named: Command[] = [];
   private readonly training: Command[] = [];
-  /** Workers handed to automatic control for training in this decision. */
-  private readonly freed = new Set<number>();
   /** Recruits promised to training orders of this decision. */
   recruits = 0;
   placedBuilding = false;
@@ -31,13 +28,13 @@ export class Turn {
   readonly game: Game;
   readonly snap: Snapshot;
 
-  /** `errands`: idle survivors the bot is walking somewhere itself (ruin visits); not handed out. */
+  /** `errands`: survivors the bot is walking somewhere itself (ruin visits); not handed out. */
   constructor(game: Game, snap: Snapshot, errands: ReadonlySet<number>) {
     this.game = game;
     this.snap = snap;
     this.resources = { ...game.state.economy.resources };
-    this.idle = snap.survivors.filter((s) => isIdle(s) && !errands.has(s.id));
-    this.busy = snap.survivors.filter((s) => s.control === 'auto' && s.task.type !== 'idle' && !errands.has(s.id));
+    const isolated = new Set(game.state.incidents.isolatedSurvivors.map((r) => r.unitId));
+    this.free = snap.survivors.filter((s) => s.control === 'auto' && !isolated.has(s.id) && !errands.has(s.id));
   }
 
   canAfford(cost: ResourceAmounts, reserve: ResourceAmounts = {}): boolean {
@@ -52,14 +49,18 @@ export class Turn {
     this.named.push(cmd);
   }
 
-  /** Takes the survivor nearest to (x, y) for a named job: an idle one, else a busy one; null if none is left. */
+  /** Takes the automatic survivor nearest to (x, y), idle ones first, for an errand; null if none is spare. */
   takeSurvivor(x: number, y: number): Survivor | null {
-    return takeNearest(this.idle.length > this.recruits ? this.idle : this.busy, x, y);
+    if (this.spareSurvivors <= 0) return null;
+    const idle = this.free.filter((s) => s.task.type === 'idle' && s.insideId === 0);
+    const s = nearest(idle.length > 0 ? idle : this.free, x, y);
+    this.free.splice(this.free.indexOf(s), 1);
+    return s;
   }
 
-  /** Idle survivors still free for named jobs (recruits already promised are kept back). */
-  get spareIdle(): number {
-    return this.idle.length - this.recruits;
+  /** Automatic survivors not yet named or promised to training in this decision. */
+  get spareSurvivors(): number {
+    return this.free.length - this.recruits;
   }
 
   place(type: BuildingType, tileX: number, tileY: number): void {
@@ -68,17 +69,10 @@ export class Turn {
     this.issue({ type: 'placeBuilding', building: type, tileX, tileY });
   }
 
-  /**
-   * Queues a soldier; `freeWorker` first hands its most recent worker not freed yet to automatic
-   * control (stop), so there is someone training may take.
-   */
-  train(building: Building, unit: SoldierType, freeWorker: Building | null): void {
+  /** Queues a soldier; training takes a spare automatic survivor. */
+  train(building: Building, unit: SoldierType): void {
     this.charge(trainingCost(this.game.modifiers, unit));
-    const worker = freeWorker?.workers.findLast((id) => !this.freed.has(id));
-    if (worker !== undefined) {
-      this.freed.add(worker);
-      this.training.push({ type: 'stop', unitIds: [worker] });
-    } else this.recruits++;
+    this.recruits++;
     this.training.push({ type: 'train', buildingId: building.id, unit });
   }
 
@@ -87,15 +81,16 @@ export class Turn {
   }
 }
 
-function takeNearest(pool: Survivor[], x: number, y: number): Survivor | null {
-  let best = -1;
+/** The survivor of a non-empty pool nearest to (x, y), the first one listed on a tie. */
+function nearest(pool: readonly Survivor[], x: number, y: number): Survivor {
+  let best = pool[0] as Survivor;
   let bestD = Infinity;
-  pool.forEach((s, k) => {
+  for (const s of pool) {
     const d = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y);
     if (d < bestD) {
-      best = k;
+      best = s;
       bestD = d;
     }
-  });
-  return best === -1 ? null : (pool.splice(best, 1)[0] as Survivor);
+  }
+  return best;
 }
