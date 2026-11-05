@@ -8,7 +8,6 @@
  */
 import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { MIN_ZOOM } from '../src/client/camera';
 import { collectErrors, startGame } from './support';
 
 const SHOTS = 'e2e/screenshots';
@@ -91,17 +90,17 @@ test('live simulation: 300 mutants + 80 soldiers fighting at night stay >= 50 fp
   // Militia starts with 2 riflemen; with 80 more the army is a bit over 80 even if one fell on nights 1-2.
   await startGame(page, { seed: 'perf-live', origin: 'militia' });
 
-  // Zoomed out as far as the camera goes, so the whole fight is on screen.
-  const placed = await page.evaluate(async (zoom) => {
+  // Zoomed out as far as the camera goes (the whole map in view), so the whole fight is on screen.
+  const placed = await page.evaluate(async () => {
     const hook = window.scraphold!;
     const s = hook.session;
     await hook.stress({ soldiers: 80, mutants: 300, night: 3 });
     const core = s.game.state.entities.get(s.game.state.coreId)!;
-    s.camera = { ...s.camera, zoom };
+    s.zoom(s.camera.viewW / 2, s.camera.viewH / 2, 0);
     s.centerOn(core.x, core.y);
     s.setSpeed(1);
     return { ...hook.onScreen(), clock: s.game.state.clock };
-  }, MIN_ZOOM);
+  });
   console.log(`scenario at day ${placed.clock.day} ${placed.clock.phase}: ${placed.mutants} mutants, ${placed.soldiers} soldiers on screen`);
   expect(placed.clock.phase).toBe('night');
   expect(placed.mutants).toBeGreaterThanOrEqual(300);

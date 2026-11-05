@@ -1,7 +1,7 @@
 /**
  * The top bar, one slim row: resources with per-minute rates and population on the left; the
  * 目标 (O) button in the middle; the fog calendar, day/night clock with tonight's forecast hanging
- * below it, speed, help and menu on the right.
+ * below it, speed, help, fullscreen and menu on the right.
  */
 import { formatClock, formatSigned } from '../hud/format';
 import { dayClockModel } from '../hud/dayClock';
@@ -10,6 +10,7 @@ import type { Session } from '../session';
 import type { Speed } from '../tickClock';
 import { rateTone } from './actions';
 import { CalendarStrip } from './CalendarStrip';
+import { FullscreenButton } from './FullscreenButton';
 import { ObjectivesButton } from './ObjectivesPanel';
 import { PauseGlyph, PlayGlyph } from './Glyphs';
 import { ResourceIcon } from './ResourceIcon';
@@ -179,6 +180,7 @@ function SpeedControls({ session }: { session: Session }) {
       <button class="btn small" data-testid="help" onClick={() => session.handleKey({ type: 'toggleHelp' }, performance.now())} title="怎么玩 / 操作说明（F1 或 ?）">
         帮助 <span class="key">F1</span>
       </button>
+      <FullscreenButton class="btn small" glyph />
       <button class="btn small" data-testid="menu" onClick={() => session.handleKey({ type: 'cancel' }, performance.now())} title="菜单（Esc）">
         菜单
       </button>

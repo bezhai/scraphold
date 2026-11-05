@@ -10,13 +10,15 @@ let input: DomInput | null = null;
 afterEach(() => {
   input?.detach();
   input = null;
+  document.body.replaceChildren();
 });
 
-function setup(options: { showIntro?: boolean } = {}) {
+function setup(options: { showIntro?: boolean } = {}, view = { viewW: 1280, viewH: 720 }) {
   const w = buildTestWorld();
-  const session = new Session(w.game, { viewW: 1280, viewH: 720 }, options);
-  input = attachInput(document.createElement('canvas'), session, () => 0);
-  return { ...w, session };
+  const session = new Session(w.game, view, options);
+  const canvas = document.body.appendChild(document.createElement('canvas'));
+  input = attachInput(canvas, session, () => 0);
+  return { ...w, session, canvas };
 }
 
 function press(code: string, init: KeyboardEventInit = {}): KeyboardEvent {
@@ -81,5 +83,40 @@ describe('attachInput keyboard', () => {
       input?.detach();
       input = null;
     }
+  });
+});
+
+describe('attachInput middle-button drag', () => {
+  /** 400 x 240 px at 44 px per tile: about 9 x 5.5 tiles of the 24 x 12 test map, so the camera can move. */
+  const SMALL_VIEW = { viewW: 400, viewH: 240 };
+
+  function mouse(target: EventTarget, type: string, x: number, y: number, button = 1) {
+    target.dispatchEvent(new MouseEvent(type, { button, clientX: x, clientY: y, bubbles: true }));
+  }
+
+  it('keeps panning while the cursor is over a HUD panel, until the button is released', () => {
+    const w = setup({}, SMALL_VIEW);
+    const panel = document.body.appendChild(document.createElement('div'));
+    const start = { ...w.session.camera };
+    mouse(w.canvas, 'mousedown', 200, 120);
+    mouse(w.canvas, 'mousemove', 156, 120);
+    mouse(panel, 'mousemove', 112, 76);
+    expect(w.session.camera.x).toBeCloseTo(start.x + 2);
+    expect(w.session.camera.y).toBeCloseTo(start.y + 1);
+
+    mouse(panel, 'mouseup', 112, 76);
+    mouse(panel, 'mousemove', 24, 32);
+    mouse(w.canvas, 'mousemove', 24, 32);
+    expect(w.session.camera.x).toBeCloseTo(start.x + 2);
+    expect(w.session.camera.y).toBeCloseTo(start.y + 1);
+  });
+
+  it('a window blur ends the drag', () => {
+    const w = setup({}, SMALL_VIEW);
+    const start = { ...w.session.camera };
+    mouse(w.canvas, 'mousedown', 200, 120);
+    window.dispatchEvent(new Event('blur'));
+    mouse(w.canvas, 'mousemove', 112, 76);
+    expect(w.session.camera).toMatchObject({ x: start.x, y: start.y });
   });
 });

@@ -2799,7 +2799,7 @@ button.pop-item:active {
 
 /* ------------------------------------------------------------------ narrower screens */
 
-@media (max-width: 1365px) {
+@media (max-width: 1439px) {
   .res {
     padding: 0 5px 0 4px;
   }

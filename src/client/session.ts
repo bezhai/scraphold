@@ -276,7 +276,7 @@ export class Session {
   }
 
   zoom(sx: number, sy: number, factor: number): void {
-    this.camera = clampCamera(zoomAt(this.camera, sx, sy, factor), this.mapSize);
+    this.camera = zoomAt(this.camera, sx, sy, factor, this.mapSize);
   }
 
   centerOn(wx: number, wy: number): void {
@@ -284,7 +284,7 @@ export class Session {
   }
 
   resize(viewW: number, viewH: number): void {
-    this.camera = resizeView(this.camera, viewW, viewH);
+    this.camera = resizeView(this.camera, viewW, viewH, this.mapSize);
   }
 
   jumpToAlert(now = 0): void {

@@ -46,19 +46,19 @@ export function attachInput(canvas: HTMLCanvasElement, session: Session, now: ()
     }
   };
 
+  // On the window, not the canvas: a middle-button drag goes on while the cursor crosses HUD panels.
   const onWindowMouseMove = (e: MouseEvent) => {
-    const r = canvas.getBoundingClientRect();
-    cursor = { x: e.clientX - r.left, y: e.clientY - r.top };
+    cursor = local(e);
+    if (middle) {
+      const cam = session.camera;
+      session.centerOn(cam.x - (cursor.x - middle.x) / cam.zoom, cam.y - (cursor.y - middle.y) / cam.zoom);
+      middle = cursor;
+    }
   };
 
   const onMouseMove = (e: MouseEvent) => {
     const p = local(e);
     session.hover = world(p);
-    if (middle) {
-      const cam = session.camera;
-      session.centerOn(cam.x - (p.x - middle.x) / cam.zoom, cam.y - (p.y - middle.y) / cam.zoom);
-      middle = p;
-    }
     if (press && !session.placing) {
       if (!press.box && Math.abs(p.x - press.x) + Math.abs(p.y - press.y) > DRAG_THRESHOLD_PX) press.box = true;
       if (press.box) session.dragBox = { x0: press.x, y0: press.y, x1: p.x, y1: p.y };
@@ -121,6 +121,7 @@ export function attachInput(canvas: HTMLCanvasElement, session: Session, now: ()
   const onBlur = () => {
     held.clear();
     press = null;
+    middle = null;
     session.dragBox = null;
   };
 

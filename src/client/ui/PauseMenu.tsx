@@ -1,5 +1,6 @@
-/** Pause menu (Esc): resume, the how-to-play overlay, restart with the same seed, quit. */
+/** Pause menu (Esc): resume, the how-to-play overlay, fullscreen, restart with the same seed, quit. */
 import type { Session } from '../session';
+import { FullscreenButton } from './FullscreenButton';
 
 export function PauseMenu({ session, onRestart, onQuit }: { session: Session; onRestart: () => void; onQuit: () => void }) {
   const openHelp = () => {
@@ -17,6 +18,7 @@ export function PauseMenu({ session, onRestart, onQuit }: { session: Session; on
         <button class="btn" onClick={openHelp}>
           怎么玩 / 操作说明 <span class="key">F1</span>
         </button>
+        <FullscreenButton class="btn" />
         <button class="btn" onClick={onRestart}>
           用同一个种子重新开始
         </button>

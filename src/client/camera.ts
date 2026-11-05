@@ -19,10 +19,14 @@ export interface MapSize {
   height: number;
 }
 
-/** CSS pixels per tile: units read clearly at the default, the whole fight fits at the minimum. */
-export const MIN_ZOOM = 20;
+/** CSS pixels per tile: units read clearly at the default. The minimum depends on the view (minZoom). */
 export const MAX_ZOOM = 80;
 export const DEFAULT_ZOOM = 44;
+/**
+ * At the minimum zoom the whole map fits in the view with this much room on every side, so the
+ * top bar (8 px from the top, 40 px high) never covers the map's top rows.
+ */
+export const FIT_MARGIN_PX = 56;
 /** Keyboard / edge pan speed in CSS pixels per second (independent of zoom). */
 export const PAN_SPEED_PX = 900;
 export const EDGE_PAN_MARGIN = 8;
@@ -35,37 +39,64 @@ export function screenToWorld(cam: Camera, sx: number, sy: number): { x: number;
   return { x: (sx - cam.viewW / 2) / cam.zoom + cam.x, y: (sy - cam.viewH / 2) / cam.zoom + cam.y };
 }
 
-function clampZoom(z: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+/**
+ * The lowest zoom for a view: the whole map fits FIT_MARGIN_PX inside every view edge. At least
+ * 1 px per tile in a window smaller than the margins, at most MAX_ZOOM in a huge one.
+ */
+export function minZoom(view: Pick<Camera, 'viewW' | 'viewH'>, map: MapSize): number {
+  const fit = Math.min((view.viewW - 2 * FIT_MARGIN_PX) / map.width, (view.viewH - 2 * FIT_MARGIN_PX) / map.height);
+  return Math.min(MAX_ZOOM, Math.max(1, fit));
 }
 
-/** Multiplies the zoom by `factor`, keeping the world point under (sx, sy) where it is on screen. */
-export function zoomAt(cam: Camera, sx: number, sy: number, factor: number): Camera {
+function clampZoom(cam: Camera, map: MapSize, z: number): number {
+  return Math.min(MAX_ZOOM, Math.max(minZoom(cam, map), z));
+}
+
+/** Multiplies the zoom by `factor`, keeping the world point under (sx, sy) where it is on screen (then clamps). */
+export function zoomAt(cam: Camera, sx: number, sy: number, factor: number, map: MapSize): Camera {
   const anchor = screenToWorld(cam, sx, sy);
-  const zoom = clampZoom(cam.zoom * factor);
-  return {
-    ...cam,
-    zoom,
-    x: anchor.x - (sx - cam.viewW / 2) / zoom,
-    y: anchor.y - (sy - cam.viewH / 2) / zoom,
-  };
+  const zoom = clampZoom(cam, map, cam.zoom * factor);
+  return clampCamera(
+    {
+      ...cam,
+      zoom,
+      x: anchor.x - (sx - cam.viewW / 2) / zoom,
+      y: anchor.y - (sy - cam.viewH / 2) / zoom,
+    },
+    map,
+  );
 }
 
 export function panByScreen(cam: Camera, dxPx: number, dyPx: number): Camera {
   return { ...cam, x: cam.x + dxPx / cam.zoom, y: cam.y + dyPx / cam.zoom };
 }
 
-/** Keeps the view center on the map. */
+/**
+ * One axis of the view center: it may leave the middle of the map by as much as the map is longer
+ * than the view (`half` tiles each side of the center), and at most up to the map edge. With the
+ * map twice the view or more the center goes anywhere on the map, so a map edge can be brought out
+ * from under the HUD; as the view grows the range narrows with it, and once the whole map fits the
+ * map stays in the middle of the view. The range never jumps, so zooming out glides the map to the
+ * middle.
+ */
+function clampAxis(center: number, size: number, half: number): number {
+  const slack = Math.min(size / 2, Math.max(0, size - 2 * half));
+  return Math.min(size / 2 + slack, Math.max(size / 2 - slack, center));
+}
+
+/** Keeps the zoom within [minZoom, MAX_ZOOM] for the view and the view center on the map (clampAxis). */
 export function clampCamera(cam: Camera, map: MapSize): Camera {
-  return { ...cam, x: Math.min(map.width, Math.max(0, cam.x)), y: Math.min(map.height, Math.max(0, cam.y)) };
+  const zoom = clampZoom(cam, map, cam.zoom);
+  return { ...cam, zoom, x: clampAxis(cam.x, map.width, cam.viewW / 2 / zoom), y: clampAxis(cam.y, map.height, cam.viewH / 2 / zoom) };
 }
 
 export function centerOn(cam: Camera, wx: number, wy: number, map: MapSize): Camera {
   return clampCamera({ ...cam, x: wx, y: wy }, map);
 }
 
-export function resizeView(cam: Camera, viewW: number, viewH: number): Camera {
-  return { ...cam, viewW, viewH };
+/** A new view size changes the minimum zoom and the center range, so this clamps too. */
+export function resizeView(cam: Camera, viewW: number, viewH: number, map: MapSize): Camera {
+  return clampCamera({ ...cam, viewW, viewH }, map);
 }
 
 /** -1/0/1 per axis when the cursor is within `margin` pixels of a view edge. */

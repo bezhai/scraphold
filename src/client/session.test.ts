@@ -11,6 +11,8 @@ import { buildTestWorld, revealAll } from './testWorld';
 import { Session } from './session';
 
 const VIEW = { viewW: 1280, viewH: 720 };
+/** About 9 x 5.5 tiles at the default zoom: the 24 x 12 test map is larger, so the camera can move (in VIEW it stays centered). */
+const SMALL_VIEW = { viewW: 400, viewH: 240 };
 
 function recordingSession(result: CommandResult = OK) {
   const w = buildTestWorld();
@@ -147,7 +149,7 @@ describe('Session keyboard input', () => {
 
   it('control groups: Ctrl+1 stores, 1 recalls, pressing 1 twice centers the camera', () => {
     const w = buildTestWorld();
-    const s = new Session(w.game, VIEW);
+    const s = new Session(w.game, SMALL_VIEW);
     s.boxSelect({ x0: 2, y0: 8, x1: 2.9, y1: 9 }, false);
     s.boxSelect({ x0: 4, y0: 8, x1: 5, y1: 9 }, true);
     s.handleKey({ type: 'assignGroup', index: 0 }, 0);
@@ -273,7 +275,7 @@ describe('Session help and first-day guide', () => {
 describe('Session events', () => {
   it('turns events into log lines, alerts and effects; F jumps to the latest alert', () => {
     const w = buildTestWorld();
-    const s = new Session(w.game, VIEW);
+    const s = new Session(w.game, SMALL_VIEW);
     s.handleKey({ type: 'togglePause' }, 0);
     w.game.events.push({ type: 'underAttack', entityId: w.shack.id, x: 16, y: 9, core: false });
     w.game.events.push({ type: 'explosion', x: 16, y: 9, radius: 1, damageType: 'explosive' });

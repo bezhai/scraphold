@@ -34,3 +34,13 @@ export function PlayGlyph() {
     </svg>
   );
 }
+
+/** Four corners pointing out (enter fullscreen) or in (leave fullscreen). */
+export function FullscreenGlyph({ exit }: { exit: boolean }) {
+  const corners = exit ? 'M2 4.5h2.5V2M7.5 2v2.5H10M10 7.5H7.5V10M4.5 10V7.5H2' : 'M2 4.5V2h2.5M7.5 2H10v2.5M10 7.5V10H7.5M4.5 10H2V7.5';
+  return (
+    <svg class="glyph" viewBox="0 0 12 12" aria-hidden="true">
+      <path d={corners} fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
+}

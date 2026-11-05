@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ZOOM,
+  FIT_MARGIN_PX,
   MAX_ZOOM,
-  MIN_ZOOM,
   cameraRectOnMinimap,
   centerOn,
   clampCamera,
   edgeAnchor,
   edgePanDirection,
+  minZoom,
   minimapToWorld,
   panByScreen,
+  resizeView,
   screenToWorld,
   visibleTileBounds,
   worldToScreen,
@@ -19,6 +21,8 @@ import {
 
 const cam: Camera = { x: 32, y: 24, zoom: 20, viewW: 800, viewH: 600 };
 const MAP = { width: 64, height: 48 };
+/** The generated game map. */
+const GAME_MAP = { width: 96, height: 72 };
 
 describe('camera transforms', () => {
   it('maps the camera center to the middle of the view', () => {
@@ -40,22 +44,51 @@ describe('camera transforms', () => {
 describe('zoomAt', () => {
   it('keeps the world point under the cursor fixed', () => {
     const before = screenToWorld(cam, 100, 80);
-    const z = zoomAt(cam, 100, 80, 1.5);
+    const z = zoomAt(cam, 100, 80, 1.5, MAP);
     expect(z.zoom).toBeCloseTo(30);
     const after = screenToWorld(z, 100, 80);
     expect(after.x).toBeCloseTo(before.x);
     expect(after.y).toBeCloseTo(before.y);
   });
 
-  it('follows the art direction: about 44 px per tile by default, 20 to 80 px per tile range', () => {
+  it('follows the art direction: about 44 px per tile by default, at most 80 px per tile', () => {
     expect(DEFAULT_ZOOM).toBe(44);
-    expect(MIN_ZOOM).toBe(20);
     expect(MAX_ZOOM).toBe(80);
   });
 
-  it('clamps zoom to [MIN_ZOOM, MAX_ZOOM]', () => {
-    expect(zoomAt(cam, 400, 300, 100).zoom).toBe(MAX_ZOOM);
-    expect(zoomAt(cam, 400, 300, 0.001).zoom).toBe(MIN_ZOOM);
+  it('clamps zoom to [minZoom for the view, MAX_ZOOM]', () => {
+    expect(zoomAt(cam, 400, 300, 100, MAP).zoom).toBe(MAX_ZOOM);
+    expect(zoomAt(cam, 400, 300, 0.001, MAP).zoom).toBe(minZoom(cam, MAP));
+  });
+});
+
+describe('minZoom', () => {
+  it('zoomed all the way out, the whole 96 x 72 map is in view at 1920x1080 and 1440x900, clear of the top bar', () => {
+    for (const [viewW, viewH] of [
+      [1920, 1080],
+      [1440, 900],
+    ] as const) {
+      const far = zoomAt({ x: 10, y: 60, zoom: DEFAULT_ZOOM, viewW, viewH }, 300, 200, 0.001, GAME_MAP);
+      // Height decides at both sizes: 72 rows in the height less a margin top and bottom.
+      expect(far.zoom, `${viewW}x${viewH}`).toBeCloseTo((viewH - 2 * FIT_MARGIN_PX) / 72);
+      const topLeft = worldToScreen(far, 0, 0);
+      const bottomRight = worldToScreen(far, 96, 72);
+      expect(topLeft.x).toBeGreaterThanOrEqual(FIT_MARGIN_PX - 1e-9);
+      expect(topLeft.y).toBeCloseTo(FIT_MARGIN_PX);
+      expect(bottomRight.x).toBeLessThanOrEqual(viewW - FIT_MARGIN_PX + 1e-9);
+      expect(bottomRight.y).toBeCloseTo(viewH - FIT_MARGIN_PX);
+    }
+    // The top bar sits 8 px from the top and is 40 px high.
+    expect(FIT_MARGIN_PX).toBeGreaterThanOrEqual(8 + 40);
+  });
+
+  it('a narrow window is decided by the width', () => {
+    expect(minZoom({ viewW: 800, viewH: 900 }, GAME_MAP)).toBeCloseTo((800 - 2 * FIT_MARGIN_PX) / 96);
+  });
+
+  it('stays positive in a window smaller than the margins and never exceeds MAX_ZOOM in a huge one', () => {
+    expect(minZoom({ viewW: 100, viewH: 80 }, GAME_MAP)).toBeGreaterThan(0);
+    expect(minZoom({ viewW: 20000, viewH: 20000 }, GAME_MAP)).toBe(MAX_ZOOM);
   });
 });
 
@@ -66,13 +99,57 @@ describe('panning and clamping', () => {
     expect(p.y).toBeCloseTo(23);
   });
 
-  it('clampCamera keeps the center inside the map', () => {
-    expect(clampCamera({ ...cam, x: -10, y: 100 }, MAP)).toMatchObject({ x: 0, y: 48 });
+  it('clampCamera: with the map at least twice the view, the center can go right up to a map edge', () => {
+    // 20 x 15 tiles in view on a 64 x 48 map.
+    const near = { ...cam, zoom: 40 };
+    expect(clampCamera({ ...near, x: -10, y: 100 }, MAP)).toMatchObject({ x: 0, y: 48 });
+    expect(clampCamera(near, MAP)).toMatchObject({ x: 32, y: 24 });
+  });
+
+  it('clampCamera: with more than half the map in view, the center leaves the middle of the map by at most the map length beyond the view', () => {
+    // 40 x 30 tiles in view on a 64 x 48 map: 24 and 18 tiles beyond the view.
+    expect(clampCamera({ ...cam, x: -10, y: 100 }, MAP)).toMatchObject({ x: 32 - 24, y: 24 + 18 });
     expect(clampCamera(cam, MAP)).toMatchObject({ x: 32, y: 24 });
   });
 
+  it('clampCamera: once the whole map fits on an axis, the map sits in the middle of the view on that axis', () => {
+    const far = { x: 0, y: 72, zoom: minZoom({ viewW: 1440, viewH: 900 }, GAME_MAP), viewW: 1440, viewH: 900 };
+    expect(clampCamera(far, GAME_MAP)).toMatchObject({ x: 48, y: 36 });
+    // 1920 px fit 96 columns at 20 px per tile, 1080 px do not fit 72 rows.
+    const wide = clampCamera({ x: 0, y: 0, zoom: 20, viewW: 1920, viewH: 1080 }, GAME_MAP);
+    expect(wide.x).toBe(48);
+    expect(wide.y).toBeLessThan(36);
+  });
+
+  it('clampCamera: the center range narrows smoothly as the zoom goes down, so the map never jumps', () => {
+    const view = { viewW: 1440, viewH: 900 };
+    const lowest = minZoom(view, GAME_MAP);
+    let prev = clampCamera({ ...view, x: 0, y: 0, zoom: 40 }, GAME_MAP);
+    expect(prev).toMatchObject({ x: 0, y: 0 });
+    for (let zoom = 40; zoom >= lowest; zoom -= 0.01) {
+      const next = clampCamera({ ...view, x: 0, y: 0, zoom }, GAME_MAP);
+      expect(Math.abs(next.x - prev.x) * zoom).toBeLessThan(2);
+      expect(Math.abs(next.y - prev.y) * zoom).toBeLessThan(2);
+      prev = next;
+    }
+    expect(prev).toMatchObject({ x: 48, y: 36 });
+  });
+
+  it('clampCamera raises a zoom below the minimum for the view', () => {
+    expect(clampCamera({ ...cam, zoom: 1 }, MAP).zoom).toBe(minZoom(cam, MAP));
+  });
+
   it('centerOn moves the center and clamps', () => {
-    expect(centerOn(cam, 70, 10, MAP)).toMatchObject({ x: 64, y: 10 });
+    expect(centerOn({ ...cam, zoom: 40 }, 70, 10, MAP)).toMatchObject({ x: 64, y: 10 });
+    expect(centerOn(cam, 70, 10, MAP)).toMatchObject({ x: 56, y: 10 });
+  });
+
+  it('resizeView: a larger window raises the minimum zoom, so a camera zoomed all the way out zooms in to fit and recenters', () => {
+    const far = zoomAt({ x: 48, y: 36, zoom: DEFAULT_ZOOM, viewW: 1440, viewH: 900 }, 720, 450, 0.001, GAME_MAP);
+    const full = resizeView(far, 1920, 1080, GAME_MAP);
+    expect(full).toMatchObject({ viewW: 1920, viewH: 1080, x: 48, y: 36 });
+    expect(full.zoom).toBeCloseTo(minZoom(full, GAME_MAP));
+    expect(full.zoom).toBeGreaterThan(far.zoom);
   });
 
   it('edgePanDirection points toward the edge the cursor touches', () => {

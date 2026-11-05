@@ -5,12 +5,12 @@
  *   explosions per second; 4 s.
  * - live stress (e2e/livePerf): about 80 soldiers around the core and 300 mutants assaulting from
  *   a ring 12-22 tiles out at night through the normal frame loop; 5 s at 1x, then 5 s at 3x. Run
- *   zoomed out as far as the camera goes (MIN_ZOOM, as the main suite) and at the default zoom.
+ *   zoomed out as far as the camera goes (the whole map in view, as the main suite) and at the default zoom.
  * Results go to the console and e2e-art/screenshots/perf.json.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { DEFAULT_ZOOM, MIN_ZOOM } from '../src/client/camera';
+import { DEFAULT_ZOOM } from '../src/client/camera';
 import { collectErrors, startGame } from '../e2e/support';
 
 const SHOTS = 'e2e-art/screenshots';
@@ -145,7 +145,7 @@ test('render stress at night: 300 mutants + 77 soldiers, paused, heavy effects',
   expect(errors).toEqual([]);
 });
 
-for (const zoom of [MIN_ZOOM, DEFAULT_ZOOM]) {
+for (const zoom of ['min', DEFAULT_ZOOM] as const) {
   test(`live stress at night, zoom ${zoom}: 300 mutants + 80 soldiers`, async ({ page }) => {
     test.setTimeout(240_000);
     const errors = collectErrors(page);
@@ -155,7 +155,8 @@ for (const zoom of [MIN_ZOOM, DEFAULT_ZOOM]) {
       const s = hook.session;
       await hook.stress({ soldiers: 80, mutants: 300, night: 3 });
       const core = s.game.state.entities.get(s.game.state.coreId)!;
-      s.camera = { ...s.camera, zoom: z };
+      if (z === 'min') s.zoom(s.camera.viewW / 2, s.camera.viewH / 2, 0);
+      else s.camera = { ...s.camera, zoom: z };
       s.centerOn(core.x, core.y);
       s.setSpeed(1);
       return { ...hook.onScreen(), clock: s.game.state.clock };
@@ -170,7 +171,7 @@ for (const zoom of [MIN_ZOOM, DEFAULT_ZOOM]) {
     const l3 = report(`zoom ${zoom} 3x`, at3x);
     await page.screenshot({ path: `${SHOTS}/p-live-night-zoom${zoom}-3x.png` });
     save(`zoom${zoom}`, { placed, at1x, at3x, lines: [l1, l3] });
-    if (zoom === MIN_ZOOM) {
+    if (zoom === 'min') {
       expect(at1x.fps).toBeGreaterThanOrEqual(50);
       expect(at3x.fps).toBeGreaterThanOrEqual(50);
     }
