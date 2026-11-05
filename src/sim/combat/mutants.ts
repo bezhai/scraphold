@@ -14,13 +14,15 @@ import { INCIDENT_RULES } from '../data/incidents';
  * - bomber: the best building within vision (nearest, or where the blast hits most), walked to by
  *   A*; else as melee without units.
  * - boss: buildings within vision first, then units, then as melee.
- * guard: engage player units near the home nest, walk back to it otherwise; nestless guards retreat.
- * retreat: walk to the home (else nearest) nest without attacking; nests.ts absorbs arrivals.
+ * guard: engage player units near the home nest, walk back to it otherwise (stay put while the nest is
+ *   walled off from the guard); nestless guards retreat.
+ * retreat: walk to the home nest without attacking (the nearest reachable one when the home is gone or
+ *   walled in, so no A* is spent on a nest it cannot reach); nests.ts absorbs arrivals.
  */
 import { ENGAGEMENT, MUTANTS, type MutantDef } from '../data/combat';
 import type { Game } from '../game';
-import { distanceToRect } from '../map/grid';
-import { ensureNav } from '../nav/navGrid';
+import { distanceToRect, inBounds, tileAtPoint } from '../map/grid';
+import { ensureNav, type NavGrid } from '../nav/navGrid';
 import { lineClear } from '../nav/pathfind';
 import type { Entity, Mutant, Nest } from '../state';
 import { followFlowField, moveUnitTo, stopUnit } from '../world/movement';
@@ -142,6 +144,19 @@ function headingTo(m: Mutant, nest: Nest): boolean {
   return m.motion.mode === 'path' && g !== null && distanceToRect(nest.tileX, nest.tileY, nest.size, g.x, g.y) <= 1.5;
 }
 
+/** Whether the mutant can walk up to the nest: an open tile around the nest is in the mutant's region. */
+function canReach(nav: NavGrid, m: Mutant, nest: Nest): boolean {
+  const t = tileAtPoint(nav, m.x, m.y);
+  // Standing on a blocked tile (a structure appeared under it): let A* find the way out.
+  if (t === -1 || nav.region[t] === -1) return true;
+  for (let y = nest.tileY - 1; y <= nest.tileY + nest.size; y++) {
+    for (let x = nest.tileX - 1; x <= nest.tileX + nest.size; x++) {
+      if (inBounds(nav, x, y) && nav.region[y * nav.width + x] === nav.region[t]) return true;
+    }
+  }
+  return false;
+}
+
 function guardNest(game: Game, m: Mutant): void {
   const home = liveEntity(game, m.ai.homeNestId);
   if ((!home || home.kind !== 'nest') && !m.ai.guardPoint) {
@@ -166,7 +181,8 @@ function guardNest(game: Game, m: Mutant): void {
   if (nest && !m.ai.guardPoint ? headingTo(m, nest) : m.motion.mode === 'path' && m.motion.goal?.x === anchor.x && m.motion.goal?.y === anchor.y) return;
   const dx = m.x - anchor.x;
   const dy = m.y - anchor.y;
-  if (dx * dx + dy * dy <= radius * radius) {
+  // Close enough, or shut out of a walled-in nest: guard right here (no A* toward a nest it cannot reach).
+  if (dx * dx + dy * dy <= radius * radius || (nest && !m.ai.guardPoint && !canReach(ensureNav(game), m, nest))) {
     if (m.motion.mode !== 'stand') stopUnit(m);
     return;
   }
@@ -195,9 +211,10 @@ interface PathBudget {
 
 function retreat(game: Game, m: Mutant, nests: readonly Nest[], budget: PathBudget): void {
   m.attack.targetId = 0;
+  const nav = ensureNav(game);
   let home = liveEntity(game, m.ai.homeNestId);
-  if (!home || home.kind !== 'nest') {
-    home = nearestNest(m, nests);
+  if (!home || home.kind !== 'nest' || !canReach(nav, m, home)) {
+    home = nearestNest(m, nests.filter((n) => canReach(nav, m, n)));
     m.ai.homeNestId = home?.id ?? 0;
   }
   if (!home) {

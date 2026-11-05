@@ -48,6 +48,26 @@ describe('navigation grid', () => {
     removeEntity(game, b);
     expect(ensureNav(game).blocked[t]).toBe(0);
   });
+
+  it('gives two open tiles the same region exactly when a path connects them', () => {
+    // A walled pocket at (2..3, 2), and (0, 6) only touches the rest diagonally past two blockers.
+    const game = createTestGame([
+      '..........',
+      '.####.....',
+      '.#..#.....',
+      '.####.CCC.',
+      '......CCC.',
+      '#.....CCC.',
+      '.#........',
+    ]);
+    const nav = ensureNav(game);
+    const open: number[] = [];
+    for (let i = 0; i < nav.blocked.length; i++) if (nav.blocked[i]) expect(nav.region[i]).toBe(-1);
+    else open.push(i);
+    const center = (t: number) => [(t % nav.width) + 0.5, Math.floor(t / nav.width) + 0.5] as const;
+    for (const a of open) for (const b of open) expect(nav.region[a] === nav.region[b]).toBe(findPath(nav, ...center(a), ...center(b)).reached);
+    expect(new Set(open.map((i) => nav.region[i])).size).toBe(3);
+  });
 });
 
 describe('findPath', () => {

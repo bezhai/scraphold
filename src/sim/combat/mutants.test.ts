@@ -1,12 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MUTANTS, NEST } from '../data/combat';
 import { SURVIVOR } from '../data/economy';
 import type { Game } from '../game';
+import { findPath } from '../nav/pathfind';
 import { stepGame } from '../pipeline';
 import type { Building, Entity, Mutant, Nest } from '../state';
 import { createTestGame } from '../testing';
-import { addBuilding, spawnMutant, spawnSoldier, spawnSurvivor } from '../world/entities';
+import { addBuilding, removeEntity, spawnMutant, spawnSoldier, spawnSurvivor } from '../world/entities';
 import { followFlowField } from '../world/movement';
+
+// Counts A* searches (a search toward a nest nobody can reach floods the whole map); behavior unchanged.
+vi.mock('../nav/pathfind', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../nav/pathfind')>();
+  return { ...actual, findPath: vi.fn(actual.findPath) };
+});
 
 const OPEN = [
   '..............................',
@@ -212,5 +219,61 @@ describe('guards and retreat', () => {
     expect(m.motion.mode).toBe('path');
     expect(Math.hypot(m.x - nest.x, m.y - nest.y)).toBeLessThan(Math.hypot(16.5 - nest.x, 8.5 - nest.y));
     expect(MUTANTS.wanderer.hp).toBe(m.maxHp);
+  });
+
+  /** Nest A (top left) inside a ring of barricades, nest B (right) open; the day's guards removed. */
+  function walledNestGame(): { game: Game; walled: Nest; open: Nest; ring: Building[] } {
+    const game = createTestGame([
+      '........................................',
+      '........................................',
+      '....NN..................................',
+      '....NN..................................',
+      '........................................',
+      '..................CCC...................',
+      '..................CCC...................',
+      '..................CCC...................',
+      '........................................',
+      '..................................NN....',
+      '..................................NN....',
+      '........................................',
+    ]);
+    const nests = [...game.state.entities.values()].filter((e): e is Nest => e.kind === 'nest');
+    const walled = nests.find((n) => n.tileX === 4)!;
+    const open = nests.find((n) => n.tileX === 34)!;
+    const ring: Building[] = [];
+    for (let y = 0; y <= 5; y++) for (let x = 2; x <= 7; x++) if (x === 2 || x === 7 || y === 0 || y === 5) ring.push(addBuilding(game, 'barricade', x, y, { complete: true }));
+    stepGame(game);
+    for (const e of game.state.entities.values()) if (e.kind === 'mutant') e.hp = 0;
+    return { game, walled, open, ring };
+  }
+
+  it('a guard shut out of its walled-in nest guards where it stands instead of searching a path every tick', () => {
+    const { game, walled, ring } = walledNestGame();
+    const g = spawnMutant(game, 'runner', 12.5, 8.5, { mode: 'guard', homeNestId: walled.id });
+    vi.mocked(findPath).mockClear();
+    run(game, 100);
+    expect(vi.mocked(findPath).mock.calls.length).toBeLessThan(3);
+    expect([g.ai.mode, g.ai.homeNestId, g.x, g.y]).toEqual(['guard', walled.id, 12.5, 8.5]);
+    // Once the wall opens it walks home again.
+    removeEntity(game, ring.find((b) => b.tileX === 7 && b.tileY === 3)!);
+    run(game, 300);
+    expect(Math.hypot(g.x - walled.x, g.y - walled.y)).toBeLessThanOrEqual(NEST.guardRadius);
+  });
+
+  it('a walled-in nest does not starve other retreating mutants of paths', () => {
+    const { game, walled, open } = walledNestGame();
+    // Lower ids than the others, so they come first for the per-tick path budget.
+    for (let k = 0; k < 10; k++) spawnMutant(game, 'runner', 10 + k * 0.7, 8.5, { mode: 'retreat', homeNestId: walled.id });
+    const others = Array.from({ length: 6 }, (_, k) => spawnMutant(game, 'runner', 20 + k * 0.7, 10.5, { mode: 'retreat', homeNestId: open.id }));
+    run(game, 300);
+    expect(others.filter((m) => game.state.entities.has(m.id)).map((m) => m.id)).toEqual([]);
+  });
+
+  it('retreating mutants whose nest is walled in go to the nearest nest they can reach', () => {
+    const { game, walled, open } = walledNestGame();
+    const m = spawnMutant(game, 'runner', 10.5, 8.5, { mode: 'retreat', homeNestId: walled.id });
+    run(game, 400, () => !game.state.entities.has(m.id));
+    expect(game.state.entities.has(m.id)).toBe(false);
+    expect(open.growth.points).toBeGreaterThan(0);
   });
 });

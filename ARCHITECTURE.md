@@ -209,7 +209,7 @@ Vite + TypeScript（strict）+ Vitest，界面用 Preact，渲染用 Canvas 2D�
 
 `stats` 是多个系统写、灵感和计分读的计数器，每个字段注释里写了由哪个任务维护。
 
-派生数据：`game.nav`（`blocked`、`structureAt`、`flowCost`、`flowNext`，读之前调 `ensureNav(game)`）、`game.spatial`、`game.modifiers`、`game.events`。
+派生数据：`game.nav`（`blocked`、`structureAt`、`region`（可通行格的连通区域编号，两格编号相同当且仅当 A* 能在两格之间找到路）、`flowCost`、`flowNext`，读之前调 `ensureNav(game)`）、`game.spatial`、`game.modifiers`、`game.events`。
 
 坐标：格子 (tx, ty) 覆盖 [tx, tx+1) × [ty, ty+1)，实体坐标是浮点格坐标，格子中心是 (tx+0.5, ty+0.5)，下标 = ty × width + tx。射程和接触都按边缘距离算：单位是中心距离减半径，建筑是到占地矩形的距离（`edgeDistance`）。
 

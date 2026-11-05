@@ -1,12 +1,12 @@
 /**
  * Navigation grid derived from the state: which tiles are blocked, which structure occupies each
- * tile, and the shared flow field toward the core. Owner: Task 1.
+ * tile, which open tiles connect, and the shared flow field toward the core. Owner: Task 1.
  *
  * Derived data (not hashed). It is rebuilt lazily by ensureNav whenever state.navVersion changes,
  * i.e. after any structure is added or removed (world/entities.ts bumps the version).
  */
 import type { Game } from '../game';
-import { PASSABLE_BY_CODE, forEachFootprintTile } from '../map/grid';
+import { NEIGHBORS_4, PASSABLE_BY_CODE, forEachFootprintTile } from '../map/grid';
 import type { GameState } from '../state';
 import { computeFlowField } from './flowField';
 import { TILE_BUILDING, TILE_CORE, TILE_NEST, TILE_OPEN, TILE_TERRAIN } from './tileClass';
@@ -22,6 +22,8 @@ export interface NavGrid {
   structureAt: Int32Array;
   /** 1 where no unit may stand: impassable terrain or any structure. */
   blocked: Uint8Array;
+  /** Connected open area per tile (-1 on blocked tiles): a unit can walk between two open tiles iff their regions are equal. */
+  region: Int32Array;
   /**
    * Flow field toward the core (Dijkstra from the core footprint). Player building tiles are
    * passable at a large extra cost, so mutants detour while any open route exists and otherwise
@@ -42,6 +44,7 @@ export function createNavGrid(width: number, height: number): NavGrid {
     tileClass: new Uint8Array(n),
     structureAt: new Int32Array(n),
     blocked: new Uint8Array(n),
+    region: new Int32Array(n),
     flowCost: new Int32Array(n),
     flowNext: new Int32Array(n),
     targetFlow: null,
@@ -63,8 +66,37 @@ export function rebuildNav(nav: NavGrid, state: GameState): void {
     });
   }
   for (let i = 0; i < terrain.length; i++) nav.blocked[i] = nav.tileClass[i] === TILE_OPEN ? 0 : 1;
+  labelRegions(nav);
   computeFlowField(nav);
   nav.version = state.navVersion;
+}
+
+/** Flood-fills `region`. A* steps diagonally only where both orthogonal tiles are open, so 4-neighbour connectivity is exactly what a path can reach. */
+function labelRegions(nav: NavGrid): void {
+  const { width, height, blocked, region } = nav;
+  region.fill(-1);
+  const stack: number[] = [];
+  let next = 0;
+  for (let seed = 0; seed < region.length; seed++) {
+    if (blocked[seed] || region[seed] !== -1) continue;
+    region[seed] = next;
+    stack.push(seed);
+    while (stack.length > 0) {
+      const i = stack.pop() as number;
+      const x = i % width;
+      const y = (i - x) / width;
+      for (const d of NEIGHBORS_4) {
+        const nx = x + d.dx;
+        const ny = y + d.dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const n = ny * width + nx;
+        if (blocked[n] || region[n] !== -1) continue;
+        region[n] = next;
+        stack.push(n);
+      }
+    }
+    next++;
+  }
 }
 
 /** Returns the navigation grid, rebuilding it first if structures changed. */
