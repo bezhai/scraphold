@@ -1,0 +1,10 @@
+{
+  "//": "Simulation layer: no DOM lib and no Node types, so browser/Node globals are compile errors in src/sim.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2023"],
+    "types": []
+  },
+  "include": ["src/sim"],
+  "exclude": ["src/sim/**/*.test.ts"]
+}
