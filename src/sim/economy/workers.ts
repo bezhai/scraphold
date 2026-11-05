@@ -8,10 +8,12 @@
  * building restores hp each tick for scrap, as far as the stockpile pays, until it is intact; a
  * repairer on a construction site helps build for free (construction.ts counts helpers). Targets
  * that vanish or cannot be reached turn the survivor idle. Slots count survivors on their way.
+ * A survivor sent from inside another building leaves it first.
  */
 import { OK, reject, type CommandHandler } from '../commands';
 import { BUILDINGS, REPAIR } from '../data/economy';
 import type { Game } from '../game';
+import { isIsolated } from '../incidents/model';
 import type { Modifiers } from '../modifiers';
 import type { Building, EntityId, Survivor } from '../state';
 import { TICKS_PER_SECOND } from '../time';
@@ -67,7 +69,7 @@ function reservedSlots(game: Game, b: Building): number {
   return n;
 }
 
-function goIdle(s: Survivor): void {
+export function goIdle(s: Survivor): void {
   s.task = idleTask();
   stopUnit(s);
 }
@@ -97,6 +99,13 @@ function repairStep(game: Game, b: Building): void {
   game.state.stats.hpRepaired += hp;
 }
 
+/** Puts a survivor on a work or repair task at `b`; one working inside a building leaves it first. */
+export function assignTask(game: Game, s: Survivor, type: 'work' | 'repair', b: Building): void {
+  if (s.insideId !== 0) exitBuilding(game, s);
+  s.task = { type, buildingId: b.id };
+  walkTo(game, s, b);
+}
+
 function doWork(game: Game, s: Survivor, b: Building): void {
   if ((b.construction !== null && b.type !== 'signalTower') || (b.type === 'signalTower' && b.construction === null)) return goIdle(s);
   if (!isAtBuilding(s, b)) {
@@ -120,7 +129,7 @@ function doRepair(game: Game, s: Survivor, b: Building): void {
 
 export function workerSystem(game: Game): void {
   for (const e of game.state.entities.values()) {
-    if (e.kind !== 'survivor' || e.task.type === 'idle' || !isOnMap(e)) continue;
+    if (e.kind !== 'survivor' || (e.task.type !== 'work' && e.task.type !== 'repair') || !isOnMap(e)) continue;
     const b = buildingById(game, e.task.buildingId);
     if (!b) goIdle(e);
     else if (e.task.type === 'work') doWork(game, e, b);
@@ -150,23 +159,26 @@ export const assignWorkHandler: CommandHandler<'assignWork'> = {
   },
   execute(game, cmd) {
     const b = buildingById(game, cmd.buildingId) as Building;
+    for (const s of survivorsOf(game, cmd.unitIds)) if (heading(s, 'work', b)) s.control = 'player';
     const free = workerSlots(game.modifiers, b) - reservedSlots(game, b);
     for (const s of newWorkers(game, cmd.unitIds, b).slice(0, free)) {
-      s.task = { type: 'work', buildingId: b.id };
-      walkTo(game, s, b);
+      s.control = 'player';
+      assignTask(game, s, 'work', b);
     }
   },
 };
 
-/** Both manual unassignment and a completed relay return workers to idle on the map. */
-export function releaseWorkers(game: Game, b: Building, count: number): void {
-  const leaving = b.workers.slice(Math.max(0, b.workers.length - Math.floor(count)));
-  for (const id of leaving) {
+/** Puts the last `count` workers of `b` on the map beside it, standing; returns them. */
+export function releaseWorkers(game: Game, b: Building, count: number): Survivor[] {
+  const released: Survivor[] = [];
+  for (const id of b.workers.slice(Math.max(0, b.workers.length - Math.floor(count)))) {
     const s = game.state.entities.get(id);
     if (!s || s.kind !== 'survivor') continue;
     exitBuilding(game, s);
-    goIdle(s);
+    stopUnit(s);
+    released.push(s);
   }
+  return released;
 }
 
 export const unassignWorkHandler: CommandHandler<'unassignWork'> = {
@@ -174,12 +186,16 @@ export const unassignWorkHandler: CommandHandler<'unassignWork'> = {
     const b = buildingById(game, cmd.buildingId);
     if (!b) return reject('unknownTarget');
     if (b.workers.length === 0) return reject('noWorkers');
-    if (b.workers.slice(Math.max(0, b.workers.length - Math.floor(cmd.count))).some(id => game.state.incidents.isolatedSurvivors.some(s => s.unitId === id))) return reject('workersIsolated');
+    if (b.workers.slice(Math.max(0, b.workers.length - Math.floor(cmd.count))).some(id => isIsolated(game.state.incidents, id))) return reject('workersIsolated');
     return cmd.count >= 1 ? OK : reject('noValidUnits');
   },
   execute(game, cmd) {
     const b = buildingById(game, cmd.buildingId) as Building;
-    releaseWorkers(game, b, cmd.count);
+    // Pulled out by the player: they wait for the next command (X hands them back).
+    for (const s of releaseWorkers(game, b, cmd.count)) {
+      s.task = { type: 'wait' };
+      s.control = 'player';
+    }
   },
 };
 
@@ -193,8 +209,8 @@ export const repairHandler: CommandHandler<'repair'> = {
   execute(game, cmd) {
     const b = buildingById(game, cmd.buildingId) as Building;
     for (const s of survivorsOf(game, cmd.unitIds)) {
-      s.task = { type: 'repair', buildingId: b.id };
-      walkTo(game, s, b);
+      s.control = 'player';
+      assignTask(game, s, 'repair', b);
     }
   },
 };

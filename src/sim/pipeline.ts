@@ -17,12 +17,14 @@ import { constructionSystem } from './economy/construction';
 import { explorationSystem } from './economy/exploration';
 import { populationSystem } from './economy/population';
 import { productionSystem } from './economy/production';
+import { survivorAiSystem } from './economy/survivorAi';
 import { techSystem } from './economy/tech';
 import { workerSystem } from './economy/workers';
 import { refreshModifiers, type Game } from './game';
 import { ensureNav } from './nav/navGrid';
 import { cleanupSystem } from './world/cleanup';
 import { clockSystem } from './world/clock';
+import { controlSystem } from './world/control';
 import { fogSystem } from './world/fog';
 import { movementSystem } from './world/movement';
 import { rebuildSpatialIndex } from './world/spatial';
@@ -50,6 +52,10 @@ export const PIPELINE: readonly PipelineStage[] = [
   { name: 'nests', owner: 'task3', run: nestSystem },
   { name: 'mutantAi', owner: 'task3', run: mutantAiSystem },
   { name: 'soldiers', owner: 'task3', run: soldierSystem },
+  /** Units whose player order has ended return to automatic control. */
+  { name: 'control', owner: 'task2', run: controlSystem },
+  /** Jobs, repairs and storm shelter for survivors under automatic control. */
+  { name: 'survivorAi', owner: 'task2', run: survivorAiSystem },
   /** Survivors walking to work/repair, entering buildings. */
   { name: 'workers', owner: 'task2', run: workerSystem },
   { name: 'weather', owner: 'task2', run: weatherSystem },

@@ -13,7 +13,9 @@ export type SurvivorTask =
   /** Walking to (or, when Survivor.insideId is set, working inside) a production/support building. */
   | { type: 'work'; buildingId: EntityId }
   /** Repairing a damaged building or helping a construction site. */
-  | { type: 'repair'; buildingId: EntityId };
+  | { type: 'repair'; buildingId: EntityId }
+  /** Pulled out of a building by the player (unassignWork): stands under player control until the next command. */
+  | { type: 'wait' };
 
 /** Construction site progress, in ticks. Building.construction is null once complete. */
 export interface Construction {
@@ -65,6 +67,12 @@ export interface EconomyState {
   upkeep: { hungry: boolean; lastSettledDay: number };
   tech: TechState;
   policies: PolicyState;
+  /**
+   * Survivor manager memory (economy/survivorAi.ts): production transfers wait until
+   * nextTransferTick; enemySightings is the last tick a visible mutant was seen near a building,
+   * kept for SURVIVOR_AI.enemyCalmSeconds.
+   */
+  survivorAi: { nextTransferTick: number; enemySightings: { buildingId: EntityId; tick: number }[] };
 }
 
 export function createEconomyState(): EconomyState {
@@ -78,6 +86,7 @@ export function createEconomyState(): EconomyState {
     upkeep: { hungry: false, lastSettledDay: 0 },
     tech: { current: null, progress, researched: [], inspired: [] },
     policies: { slots: Array.from({ length: START.maxPolicySlots }, () => null) },
+    survivorAi: { nextTransferTick: 0, enemySightings: [] },
   };
 }
 

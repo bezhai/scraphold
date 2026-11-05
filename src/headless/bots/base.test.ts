@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Game } from '../../sim';
+import { applyCommand, type Game } from '../../sim';
 import { createTestGame } from '../../sim/testing';
-import { addBuilding, spawnSoldier, spawnSurvivor } from '../../sim/world/entities';
+import { addBuilding, enterBuilding, spawnSoldier, spawnSurvivor } from '../../sim/world/entities';
 import { SPECIAL_RUINS } from '../../sim/data/ruins';
 import { train, visitRuins, repair } from './base';
 import { estimateThreat } from './intel';
@@ -70,6 +70,73 @@ describe('special ruin visits', () => {
     const ctx = contextOf(game);
     visitRuins(ctx, 30);
     expect(ctx.turn.commands()).toContainEqual({ type: 'move', unitIds: [visitor.id], x: 12.5, y: 1.5 });
+  });
+});
+
+describe('survivors the built-in manager keeps busy', () => {
+  const RUIN_ROWS = ['..............', '............r.', '..............', '....CCC.......', '....CCC.......', '....CCC.......', '..............'];
+
+  it('sends an auto survivor helping a site to a ruin when nobody is idle, never one the player commands', () => {
+    const game = createTestGame(RUIN_ROWS);
+    const site = addBuilding(game, 'shack', 0, 0, { complete: false });
+    const fixed = spawnSurvivor(game, 10, 6);
+    fixed.task = { type: 'repair', buildingId: site.id };
+    fixed.control = 'player';
+    const helper = spawnSurvivor(game, 8, 6);
+    helper.task = { type: 'repair', buildingId: site.id };
+    const ctx = contextOf(game);
+    visitRuins(ctx, 30);
+    expect(ctx.turn.commands()).toContainEqual({ type: 'move', unitIds: [helper.id], x: 12.5, y: 1.5 });
+  });
+
+  it('takes an auto worker out of its building for a ruin when nobody is idle or helping', () => {
+    const game = createTestGame(RUIN_ROWS);
+    const farm = addBuilding(game, 'greenhouse', 0, 0, { complete: true });
+    const fixed = spawnSurvivor(game, 1, 1);
+    enterBuilding(game, fixed, farm);
+    fixed.task = { type: 'work', buildingId: farm.id };
+    fixed.control = 'player';
+    const worker = spawnSurvivor(game, 1, 1);
+    enterBuilding(game, worker, farm);
+    worker.task = { type: 'work', buildingId: farm.id };
+    const ctx = contextOf(game);
+    visitRuins(ctx, 30);
+    expect(ctx.turn.commands()).toEqual([{ type: 'move', unitIds: [worker.id], x: 12.5, y: 1.5 }]);
+  });
+
+  it('hands out survivors it pulled out of a building, who wait for its orders', () => {
+    const game = createTestGame(RUIN_ROWS);
+    const waiting = spawnSurvivor(game, 8, 6);
+    waiting.task = { type: 'wait' };
+    waiting.control = 'player';
+    const ctx = contextOf(game);
+    visitRuins(ctx, 30);
+    expect(ctx.turn.commands()).toEqual([{ type: 'move', unitIds: [waiting.id], x: 12.5, y: 1.5 }]);
+  });
+
+  it('frees a worker it assigned so that training has a recruit', () => {
+    const game = withBarracks(0);
+    const farm = addBuilding(game, 'greenhouse', 4, 0, { complete: true });
+    for (const s of [...game.state.entities.values()].filter((e) => e.kind === 'survivor')) {
+      if (s.kind !== 'survivor') continue;
+      enterBuilding(game, s, farm);
+      s.task = { type: 'work', buildingId: farm.id };
+      s.control = 'player';
+    }
+    const ctx = contextOf(game);
+    train(ctx, saver);
+    const orders = ctx.turn.commands();
+    expect(orders.some((c) => c.type === 'train')).toBe(true);
+    for (const c of orders) expect(applyCommand(game, c)).toEqual({ ok: true });
+  });
+
+  it('does not hand out an idle survivor walking under a player order', () => {
+    const game = createTestGame(RUIN_ROWS);
+    const walker = spawnSurvivor(game, 8, 6);
+    walker.control = 'player';
+    const ctx = contextOf(game);
+    visitRuins(ctx, 30);
+    expect(ctx.turn.commands()).toEqual([]);
   });
 });
 

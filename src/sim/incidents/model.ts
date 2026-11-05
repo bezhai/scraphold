@@ -86,3 +86,7 @@ export function createIncidentState(): IncidentState {
     fragmentIndex: 0
   };
 }
+/** Isolated survivors sit in the core until their record expires: no commands, no training, no reassignment. */
+export function isIsolated(incidents: Pick<IncidentState, 'isolatedSurvivors'>, unitId: EntityId): boolean {
+  return incidents.isolatedSurvivors.some(record => record.unitId === unitId);
+}

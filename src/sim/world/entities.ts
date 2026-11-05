@@ -46,6 +46,7 @@ export function spawnSurvivor(game: Game, x: number, y: number): Survivor {
     lastDamagedTick: -1,
     motion: createMotion(SURVIVOR.speed, SURVIVOR.mass),
     task: idleTask(),
+    control: 'auto',
     insideId: 0,
   });
 }
@@ -67,6 +68,7 @@ export function spawnSoldier(game: Game, type: SoldierType, x: number, y: number
     lastDamagedTick: -1,
     motion: createMotion(def.speed, def.mass),
     order: { type: 'idle' },
+    control: 'auto',
     deploymentGoal: null,
     attack: createAttackState(),
     veterancy: createVeterancy(),

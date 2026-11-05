@@ -130,6 +130,7 @@ export function updateConsequences(game: Game): void {
     if (record.expiresTick > state.tick) return true;
     exitBuilding(game, s);
     s.task = idleTask();
+    s.control = 'auto';
     return false;
   });
   if (state.clock.phase === 'night') {

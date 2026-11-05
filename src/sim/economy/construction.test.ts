@@ -211,7 +211,7 @@ describe('training', () => {
     expect(barracks.trainQueue).toEqual([{ unit: 'rifleman', progress: 0, total: secondsToTicks(SOLDIERS.rifleman.trainSeconds), paid: cost }]);
   });
 
-  it('takes the idle survivor nearest to the building and never a worker', () => {
+  it('takes the idle survivor nearest to the building before a busy one', () => {
     const game = createTestGame(ROWS);
     const barracks = addBuilding(game, 'barracks', 0, 0, { complete: true });
     const yard = addBuilding(game, 'salvageYard', 2, 6, { complete: false });
@@ -219,12 +219,15 @@ describe('training', () => {
     const near = spawnSurvivor(game, 3.5, 1.5);
     const worker = spawnSurvivor(game, 2.5, 2.5);
     worker.task = { type: 'repair', buildingId: yard.id };
+    game.state.economy.resources.food = 999;
     applyCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' });
     expect(game.state.entities.has(near.id)).toBe(false);
     expect(game.state.entities.has(far.id)).toBe(true);
     applyCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' });
     expect(game.state.entities.has(far.id)).toBe(false);
-    expect(validateCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' })).toEqual({ ok: false, reason: 'noIdleSurvivor' });
+    applyCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' });
+    expect(game.state.entities.has(worker.id)).toBe(false);
+    expect(validateCommand(game, { type: 'train', buildingId: barracks.id, unit: 'scout' })).toEqual({ ok: false, reason: 'noAutoSurvivor' });
   });
 
   it('rejects wrong buildings, locked units, full queues, missing resources and sites', () => {

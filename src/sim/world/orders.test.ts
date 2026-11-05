@@ -4,7 +4,7 @@ import type { Command } from '../commands';
 import { hashValue } from '../hash';
 import { FOG_UNEXPLORED } from '../state';
 import { createTestGame } from '../testing';
-import { addBuilding, spawnMutant, spawnSoldier, spawnSurvivor } from './entities';
+import { addBuilding, enterBuilding, spawnMutant, spawnSoldier, spawnSurvivor } from './entities';
 
 const ROWS = [
   '....................',
@@ -78,6 +78,30 @@ describe('unit orders', () => {
     expect(applyCommand(game, { type: 'hold', unitIds: [r2.id] })).toEqual({ ok: true });
     expect(r2.order).toEqual({ type: 'hold' });
     expect(r2.motion.mode).toBe('stand');
+  });
+
+  it('takes survivors working inside a building out for a move, an attack-move or a stop, but never isolated ones', () => {
+    const { game } = setup();
+    const farm = addBuilding(game, 'greenhouse', 1, 5, { complete: true });
+    const core = game.state.entities.get(game.state.coreId);
+    const [a, b, c, isolated] = [0, 1, 2, 3].map(() => spawnSurvivor(game, 2.5, 4.5));
+    for (const s of [a!, b!, c!]) {
+      enterBuilding(game, s, farm);
+      s.task = { type: 'work', buildingId: farm.id };
+    }
+    if (core?.kind === 'building') enterBuilding(game, isolated!, core);
+    game.state.incidents.isolatedSurvivors.push({ unitId: isolated!.id, expiresTick: 1000 });
+    expect(applyCommand(game, { type: 'move', unitIds: [isolated!.id], x: 5.5, y: 7.5 })).toEqual({ ok: false, reason: 'noValidUnits' });
+    expect(applyCommand(game, { type: 'move', unitIds: [a!.id], x: 5.5, y: 7.5 })).toEqual({ ok: true });
+    expect(applyCommand(game, { type: 'attackMove', unitIds: [b!.id], x: 6.5, y: 7.5 })).toEqual({ ok: true });
+    expect(applyCommand(game, { type: 'stop', unitIds: [c!.id] })).toEqual({ ok: true });
+    expect(farm.workers).toEqual([]);
+    for (const s of [a!, b!, c!]) {
+      expect(s.insideId).toBe(0);
+      expect(s.task).toEqual({ type: 'idle' });
+    }
+    expect([a!.motion.mode, b!.motion.mode, c!.motion.mode]).toEqual(['path', 'path', 'stand']);
+    expect(c!.control).toBe('auto');
   });
 
   it('sets rally points only on buildings that train units', () => {

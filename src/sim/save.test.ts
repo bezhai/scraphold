@@ -49,6 +49,22 @@ describe('automatic save format', () => {
     expect(original.state.map.terrain[0]).not.toBe(255);
   });
 
+  it('keeps who controls each unit and the survivor manager memory', () => {
+    const original = activeGame();
+    expect(SAVE_VERSION).toBe(13);
+    const units = [...original.state.entities.values()].filter((e) => e.kind === 'soldier' || e.kind === 'survivor');
+    const held = units.find((e) => e.kind === 'soldier')!;
+    applyCommand(original, { type: 'hold', unitIds: [held.id] });
+    original.state.economy.survivorAi.nextTransferTick = original.state.tick + 77;
+    original.state.economy.survivorAi.enemySightings.push({ buildingId: original.state.coreId, tick: original.state.tick - 3 });
+    const restored = restoreGame(serializeGame(original))!;
+    const control = (g: typeof original) => [...g.state.entities.values()].flatMap((e) => (e.kind === 'soldier' || e.kind === 'survivor' ? [[e.id, e.control]] : []));
+    expect(control(restored)).toEqual(control(original));
+    expect(control(restored)).toContainEqual([held.id, 'player']);
+    expect(control(restored).some(([, c]) => c === 'auto')).toBe(true);
+    expect(restored.state.economy.survivorAi).toEqual({ nextTransferTick: original.state.tick + 77, enemySightings: [{ buildingId: original.state.coreId, tick: original.state.tick - 3 }] });
+  });
+
   it('rejects other versions and corrupt saves without throwing', () => {
     const data = JSON.parse(serializeGame(activeGame()));
     data.version = 10;

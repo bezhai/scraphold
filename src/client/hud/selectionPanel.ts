@@ -7,6 +7,7 @@ import {
   buildingHousing,
   buildingYieldPerDay,
   hiveDamageReduction,
+  nearestAutoSurvivor,
   onsiteWorkerCount,
   ordinaryNestsLeft,
   perDayToPerMinute,
@@ -38,7 +39,7 @@ import {
 import { BUILDINGS, RESOURCES, RESOURCE_NAMES, TECHS, type BuildingType, type Resource } from '../../sim/data/economy';
 import { TICKS_PER_SECOND } from '../../sim/time';
 import { trainsSoldiers } from '../input/rightClick';
-import { isOnMap, type BuildingView, type EntityView, type MutantView, type NestView, type SoldierView, type SurvivorView } from '../view';
+import type { BuildingView, EntityView, MutantView, NestView, SoldierView, SurvivorView } from '../view';
 import { availabilityOf, costItems, unavailable, type Availability, type CostItem } from './availability';
 import { formatPercent } from './format';
 
@@ -244,26 +245,12 @@ function groupEntries(units: readonly (SoldierView | SurvivorView)[]): GroupEntr
   return out;
 }
 
-/** Nearest idle survivor on the map (ties: lower id), the one the panel buttons send. */
-export function nearestIdleSurvivor(view: GameView, x: number, y: number): SurvivorView | null {
-  let best: SurvivorView | null = null;
-  let bestD = Infinity;
-  for (const e of view.entities.values()) {
-    if (e.kind !== 'survivor' || !isOnMap(e) || e.task.type !== 'idle') continue;
-    const d = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
-    if (d < bestD) {
-      best = e;
-      bestD = d;
-    }
-  }
-  return best;
-}
+const NO_AUTO_SURVIVOR = '没有自动管理的幸存者';
 
-const NO_IDLE_SURVIVOR = '没有空闲的幸存者';
-
+/** The panel buttons send the survivor training would take (the simulation's nearestAutoSurvivor). */
 function sendSurvivor(game: Game, b: BuildingView, type: 'assignWork' | 'repair'): Availability {
-  const s = nearestIdleSurvivor(game.state, b.x, b.y);
-  if (!s) return unavailable(NO_IDLE_SURVIVOR);
+  const s = nearestAutoSurvivor(game.state, b);
+  if (!s) return unavailable(NO_AUTO_SURVIVOR);
   return availabilityOf(game, { type, unitIds: [s.id], buildingId: b.id });
 }
 

@@ -74,6 +74,37 @@ export const TRAINING = {
   queueLimit: 5,
 };
 
+/** The survivor manager (economy/survivorAi.ts): survivors under automatic control. */
+export const SURVIVOR_AI = {
+  /** Ticks between two decisions. */
+  intervalTicks: 20,
+  /** By day, at most one worker per this many seconds moves between production lines. */
+  transferSeconds: 5,
+  /** A worker moves only when the two lines are together at least this many workers off their shares. */
+  transferGap: 2,
+  /** Finished buildings below this share of max hp get repairers; a started repair runs to full hp. */
+  repairBelowPct: 0.9,
+  /** One repairer per this much missing hp, up to CONSTRUCTION.maxBuilders per building. */
+  hpPerRepairer: 150,
+  /** Repairs start only with at least this much scrap in stock. */
+  repairMinScrap: 20,
+  /** By day, repairs take workers out of production while fewer than this share of the managed survivors repair. */
+  repairShare: 0.25,
+  /** Nobody is sent to a building with a visible mutant this close to it (tiles); repairers there are called back. */
+  enemyClearance: 10,
+  /** ...nor until no mutant has been seen that close for this many seconds (a mutant at the edge of sight comes and goes). */
+  enemyCalmSeconds: 5,
+  /** A line's weight is 1, times up to (1 + shortageBoost) as its stock falls from target to 0, halved above glut. */
+  shortageBoost: 3,
+  stock: {
+    food: { target: 60, glut: 300 },
+    scrap: { target: 80, glut: 400 },
+    fuel: { target: 30, glut: 150 },
+  } as Record<'food' | 'scrap' | 'fuel', { target: number; glut: number }>,
+  /** The food target also covers this many days of soldier upkeep. */
+  upkeepDays: 1.5,
+};
+
 // ---------------------------------------------------------------------------------------------
 // Buildings
 

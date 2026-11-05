@@ -20,6 +20,8 @@ describe('pipeline', () => {
       'task3:nests',
       'task3:mutantAi',
       'task3:soldiers',
+      'task2:control',
+      'task2:survivorAi',
       'task2:workers',
       'task2:weather',
       'task1:movement',

@@ -92,7 +92,7 @@ export type RejectReason =
   | 'notMilitary'
   | 'notTrainable'
   | 'queueFull'
-  | 'noIdleSurvivor'
+  | 'noAutoSurvivor'
   | 'invalidIndex'
   // research and policies
   | 'alreadyResearched'
@@ -146,7 +146,7 @@ export const REJECT_REASON_TEXT: Record<RejectReason, string> = {
   notMilitary: '这座建筑不能训练士兵',
   notTrainable: '这座建筑不能训练该兵种',
   queueFull: '训练队列已满',
-  noIdleSurvivor: '没有空闲的幸存者可以训练',
+  noAutoSurvivor: '没有自动管理的幸存者可以训练',
   invalidIndex: '队列中没有这一项',
   alreadyResearched: '已经研究完成',
   prerequisitesMissing: '前置科技未完成',

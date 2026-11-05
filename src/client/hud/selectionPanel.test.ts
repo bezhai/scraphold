@@ -99,13 +99,23 @@ describe('selectionPanelModel: buildings', () => {
     expect(selectionPanelModel(w.game, [w.shack.id])).toMatchObject({ building: { output: [] } });
   });
 
-  it('cannot add a worker without an idle survivor on the map', () => {
+  it('sends a survivor under automatic control from another job when nobody is idle', () => {
     const w = buildTestWorld();
     w.survivor1.task = { type: 'repair', buildingId: w.damaged.id };
     w.survivor2.hp = 0;
     const m = selectionPanelModel(w.game, [w.greenhouse.id]);
     if (m.kind !== 'building') throw new Error('expected building');
-    expect(m.building.addWorker).toEqual({ ok: false, reason: '没有空闲的幸存者', command: null });
+    expectMirrors(m.building.addWorker, w.game, { type: 'assignWork', unitIds: [w.survivor1.id], buildingId: w.greenhouse.id });
+  });
+
+  it('cannot add a worker without a survivor under automatic control', () => {
+    const w = buildTestWorld();
+    w.survivor1.task = { type: 'repair', buildingId: w.damaged.id };
+    w.survivor1.control = 'player';
+    w.survivor2.hp = 0;
+    const m = selectionPanelModel(w.game, [w.greenhouse.id]);
+    if (m.kind !== 'building') throw new Error('expected building');
+    expect(m.building.addWorker).toEqual({ ok: false, reason: '没有自动管理的幸存者', command: null });
   });
 
   it('lists trainable units and the queue of a military building', () => {

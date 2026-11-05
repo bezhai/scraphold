@@ -40,7 +40,7 @@ export function createSignalBot(): Controller {
     if (game.state.economy.resources.fuel < 100) for (const oil of snap.buildings.filter(b => b.type === 'oilWell' && !b.construction)) {
       const assigned = snap.survivors.filter(s => s.task.type === 'work' && s.task.buildingId === oil.id).length;
       if (assigned < 2) {
-        const s = turn.takeIdle(oil.x, oil.y);
+        const s = turn.takeSurvivor(oil.x, oil.y);
         if (s) turn.issue({ type: 'assignWork', buildingId: oil.id, unitIds: [s.id] });
       }
     }
@@ -61,7 +61,7 @@ export function createSignalBot(): Controller {
     if (tower.construction) {
       const assigned = snap.survivors.filter(s => s.task.type === 'work' && s.task.buildingId === tower.id).length;
       for (let i = assigned; i < 3; i++) {
-        const s = turn.takeIdle(tower.x, tower.y);
+        const s = turn.takeSurvivor(tower.x, tower.y);
         if (s) turn.issue({ type: 'assignWork', buildingId: tower.id, unitIds: [s.id] });
         else {
           const from = snap.buildings.find(b => b.id !== tower.id && b.workers.length > 1);

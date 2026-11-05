@@ -157,7 +157,7 @@ export function train(ctx: Context, strategy: Strategy): void {
   }
 }
 
-/** Idle survivors patch damaged buildings by day; repairers already on the job keep going. */
+/** Survivors from the Turn (idle first) patch damaged buildings by day; repairers already on the job keep going. */
 export function repair(ctx: Context, maxRepairers: number, minHpShare: number): void {
   const { turn, snap, game } = ctx;
   if (game.state.economy.resources.scrap < 20) return;
@@ -166,14 +166,14 @@ export function repair(ctx: Context, maxRepairers: number, minHpShare: number): 
   for (const b of damaged) {
     if (busy >= maxRepairers) return;
     if (snap.survivors.some((s) => s.task.type === 'repair' && s.task.buildingId === b.id)) continue;
-    const s = turn.takeIdle(b.x, b.y);
+    const s = turn.takeSurvivor(b.x, b.y);
     if (!s) return;
     turn.issue({ type: 'repair', unitIds: [s.id], buildingId: b.id });
     busy++;
   }
 }
 
-/** Sends an idle survivor to the nearest known ruin within reach, by day, away from known nests. */
+/** Sends a survivor from the Turn (idle first) to the nearest known ruin within reach, by day, away from known nests. */
 export function visitRuins(ctx: Context, maxDistance: number): void {
   const { game, turn, snap, memory } = ctx;
   if (game.state.clock.phase !== 'day') return;
@@ -185,7 +185,7 @@ export function visitRuins(ctx: Context, maxDistance: number): void {
     .filter((p) => distance(p, ctx.core) <= maxDistance && snap.discoveredNests.every((n) => distance(n, p) > 10))
     .sort((a, b) => distance(a, ctx.core) - distance(b, ctx.core))[0];
   if (!target) return;
-  const s = turn.takeIdle(target.x, target.y);
+  const s = turn.takeSurvivor(target.x, target.y);
   if (!s) return;
   memory.ruinVisitor = s.id;
   turn.issue({ type: 'move', unitIds: [s.id], x: target.x, y: target.y });

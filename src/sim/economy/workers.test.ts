@@ -111,8 +111,42 @@ describe('assignWork', () => {
   });
 });
 
+describe('sending survivors who work inside a building', () => {
+  it('takes them out of their workplace for another job or a repair', () => {
+    const game = createTestGame(ROWS);
+    const farm = addBuilding(game, 'greenhouse', 0, 0, { complete: true });
+    const yard = addBuilding(game, 'salvageYard', 12, 6, { complete: true });
+    yard.hp = yard.maxHp - 20;
+    const [a, b] = survivorsAt(game, [
+      [1.5, 2.5],
+      [1.5, 2.5],
+    ]);
+    for (const s of [a!, b!]) {
+      enterBuilding(game, s, farm);
+      s.task = { type: 'work', buildingId: farm.id };
+    }
+    expect(applyCommand(game, { type: 'assignWork', unitIds: [a!.id], buildingId: yard.id })).toEqual({ ok: true });
+    expect(applyCommand(game, { type: 'repair', unitIds: [b!.id], buildingId: yard.id })).toEqual({ ok: true });
+    expect(farm.workers).toEqual([]);
+    expect([a!.insideId, b!.insideId]).toEqual([0, 0]);
+    expect(a!.task).toEqual({ type: 'work', buildingId: yard.id });
+    expect(b!.task).toEqual({ type: 'repair', buildingId: yard.id });
+    expect(a!.motion.mode).toBe('path');
+  });
+
+  it('never sends a survivor isolated by an incident', () => {
+    const game = createTestGame(ROWS);
+    const yard = addBuilding(game, 'salvageYard', 12, 6, { complete: true });
+    const core = game.state.entities.get(game.state.coreId) as Building;
+    const [s] = survivorsAt(game, [[1.5, 7.5]]);
+    enterBuilding(game, s!, core);
+    game.state.incidents.isolatedSurvivors.push({ unitId: s!.id, expiresTick: 1000 });
+    expect(validateCommand(game, { type: 'assignWork', unitIds: [s!.id], buildingId: yard.id })).toEqual({ ok: false, reason: 'noValidUnits' });
+  });
+});
+
 describe('unassignWork', () => {
-  it('sends the most recent workers out beside the building, idle', () => {
+  it('sends the most recent workers out beside the building, waiting for orders under player control', () => {
     const game = createTestGame(ROWS);
     const yard = addBuilding(game, 'salvageYard', 12, 6, { complete: true });
     const workers = survivorsAt(game, [
@@ -127,7 +161,7 @@ describe('unassignWork', () => {
     expect(applyCommand(game, { type: 'unassignWork', buildingId: yard.id, count: 2 })).toEqual({ ok: true });
     expect(yard.workers).toEqual([workers[0]!.id]);
     for (const w of workers.slice(1)) {
-      expect(w).toMatchObject({ insideId: 0, task: { type: 'idle' } });
+      expect(w).toMatchObject({ insideId: 0, task: { type: 'wait' }, control: 'player' });
       expect(Math.abs(w.x - yard.x)).toBeLessThan(2.5);
     }
   });

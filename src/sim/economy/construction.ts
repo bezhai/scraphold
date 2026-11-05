@@ -9,10 +9,11 @@
  * builderSpeedPct for each survivor helping at the site (repair task, up to maxBuilders). Their
  * hp starts at startHpPct and grows with progress; damage taken meanwhile is kept.
  *
- * Training takes its recruit when the order is queued (the nearest idle survivor leaves the map),
- * so the queue never stalls for lack of people and the cost of an army shows at once in the
- * worker count. Cancelling an order, or demolishing the building, gives the recruit and the cost
- * back. Only the head of a queue progresses.
+ * Training takes its recruit when the order is queued: the nearest survivor under automatic
+ * control, idle ones first (survivorAi.ts nearestAutoSurvivor), leaves the map, so the queue never
+ * stalls for lack of people and the cost of an army shows at once in the worker count. Survivors
+ * the player commands are never taken. Cancelling an order, or demolishing the building, gives the
+ * recruit and the cost back. Only the head of a queue progresses.
  */
 import { SIGNAL_TEXT } from '../data/signal';
 import { signalMessage } from '../signal/signal';
@@ -28,7 +29,9 @@ import { addBuilding, removeEntity, spawnSoldier, spawnSurvivor } from '../world
 import { moveUnitTo } from '../world/movement';
 import { checkPlacement } from '../world/placement';
 import { buildingById, pointBeside } from './buildings';
+import { idleTask } from './model';
 import { buildingCost, canAfford, pay, refund, trainingCost } from './resources';
+import { nearestAutoSurvivor } from './survivorAi';
 import { helpersByBuilding, onsiteWorkerCount, releaseWorkers } from './workers';
 
 /** Whether `type` can be placed at all right now (build menu): placeable, unlocked, under its limit, affordable. */
@@ -61,20 +64,6 @@ function isMilitary(type: BuildingType): boolean {
   return SOLDIER_TYPES.some((s) => SOLDIERS[s].trainedAt === type);
 }
 
-function nearestIdleSurvivor(game: Game, b: Building): Survivor | null {
-  let best: Survivor | null = null;
-  let bestD = Infinity;
-  for (const e of game.state.entities.values()) {
-    if (e.kind !== 'survivor' || e.task.type !== 'idle' || e.insideId !== 0 || e.hp <= 0) continue;
-    const d = (e.x - b.x) * (e.x - b.x) + (e.y - b.y) * (e.y - b.y);
-    if (d < bestD) {
-      best = e;
-      bestD = d;
-    }
-  }
-  return best;
-}
-
 function returnRecruit(game: Game, b: Building): void {
   const at = pointBeside(game, b);
   spawnSurvivor(game, at.x, at.y);
@@ -92,7 +81,11 @@ function advanceSite(game: Game, b: Building, helpers: number): void {
   b.hp = Math.min(b.maxHp, b.hp + (b.maxHp * (1 - CONSTRUCTION.startHpPct) * step) / site.total);
   if (site.progress < site.total) return;
   b.construction = null;
-  if (b.type === 'signalTower') releaseWorkers(game, b, b.workers.length);
+  // The finished tower's crew is done: back to idle under automatic control.
+  if (b.type === 'signalTower') for (const s of releaseWorkers(game, b, b.workers.length)) {
+    s.task = idleTask();
+    s.control = 'auto';
+  }
   refreshBuildingStats(game, b);
   game.state.stats.buildingsBuilt[b.type]++;
   emit(game, { type: 'buildingCompleted', buildingId: b.id, building: b.type });
@@ -197,13 +190,13 @@ export const trainHandler: CommandHandler<'train'> = {
     if (!game.modifiers.unlockedUnits.has(cmd.unit)) return reject('locked');
     if (b.trainQueue.length >= TRAINING.queueLimit) return reject('queueFull');
     if (!canAfford(game.state.economy.resources, trainingCost(game.modifiers, cmd.unit))) return reject('insufficientResources');
-    return nearestIdleSurvivor(game, b) ? OK : reject('noIdleSurvivor');
+    return nearestAutoSurvivor(game.state, b) ? OK : reject('noAutoSurvivor');
   },
   execute(game, cmd) {
     const b = buildingById(game, cmd.buildingId) as Building;
     const paid = trainingCost(game.modifiers, cmd.unit);
     pay(game.state.economy.resources, paid);
-    removeEntity(game, nearestIdleSurvivor(game, b) as Survivor);
+    removeEntity(game, nearestAutoSurvivor(game.state, b) as Survivor);
     b.trainQueue.push({ unit: cmd.unit, progress: 0, total: Math.max(1, secondsToTicks(SOLDIERS[cmd.unit].trainSeconds)), paid });
   },
 };

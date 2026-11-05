@@ -37,6 +37,7 @@ export { checkBuildable } from './economy/construction';
 export { RATE_PERIOD_SECONDS, bonusTerrainTiles, buildingYieldPerDay, perDayToPerMinute, placementBonusPct, terrainBonusPct } from './economy/production';
 export { buildingCost, trainingCost } from './economy/resources';
 export { onsiteWorkerCount, workerSlots } from './economy/workers';
+export { nearestAutoSurvivor } from './economy/survivorAi';
 export { usablePolicySlots } from './economy/policies';
 export { inspirationProgress } from './economy/tech';
 export { buildingHousing, populationCount } from './economy/population';

@@ -52,7 +52,7 @@ describe('special ruins', () => {
     techSystem(g);
     for (const id of TECH_IDS) if (TECHS[id].inspiration.kind === 'exploreRuins' && TECHS[id].inspiration.count <= 3) expect(g.state.economy.tech.inspired).toContain(id);
     const saved = serializeGame(g);
-    expect(SAVE_VERSION).toBe(12);
+    expect(SAVE_VERSION).toBe(13);
     const restored = restoreGame(saved)!;
     expect(hashState(restored)).toBe(hashState(g));
     expect(restored.state.map.ruins).toEqual(g.state.map.ruins);

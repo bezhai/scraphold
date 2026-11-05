@@ -132,11 +132,19 @@ export interface Motion {
   stuckTicks: number;
 }
 
+/**
+ * Who decides what a player unit does (UI). Units start under automatic control (the survivor
+ * manager, economy/survivorAi.ts); any unit command puts the commanded units under player control
+ * until the order ends (world/control.ts).
+ */
+export type UnitControl = 'auto' | 'player';
+
 export interface Survivor extends EntityBase {
   kind: 'survivor';
   faction: 'player';
   motion: Motion;
   task: SurvivorTask;
+  control: UnitControl;
   /** Building the survivor works inside; 0 = on the map. Inside survivors are not moved, seen or hit. */
   insideId: EntityId;
 }
@@ -159,6 +167,7 @@ export interface Soldier extends EntityBase {
   type: SoldierType;
   motion: Motion;
   order: SoldierOrder;
+  control: UnitControl;
   /** Initial rally destination; cleared on arrival or a new player order. */
   deploymentGoal: Point | null;
   attack: AttackState;

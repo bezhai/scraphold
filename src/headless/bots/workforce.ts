@@ -82,7 +82,7 @@ export function staff(ctx: Context, shares: WorkforceShares): void {
     lines.sort((a, b) => deficit(shares, counts, b, total + 1) - deficit(shares, counts, a, total + 1));
     const line = lines[0] as Line;
     const b = open.filter((x) => lineOf(x.type) === line).sort((p, q) => bonus(ctx, q) - bonus(ctx, p) || p.id - q.id)[0] as Building;
-    const s = turn.takeIdle(b.x, b.y);
+    const s = turn.takeSurvivor(b.x, b.y);
     if (!s) return;
     turn.issue({ type: 'assignWork', unitIds: [s.id], buildingId: b.id });
     ctx.assigned.set(b.id, (ctx.assigned.get(b.id) ?? 0) + 1);

@@ -2,21 +2,28 @@
  * Unit order commands and rally points. Owner: Task 1.
  * These set Soldier.order / Survivor.task and the movement intent. What soldiers do with their
  * order while moving or standing (engaging on attack-move, chasing a focus target, holding) is
- * Task 3's soldier system.
+ * Task 3's soldier system. Every order puts the commanded units under player control; stop hands
+ * them back to automatic control (world/control.ts hands back the orders that end on their own).
+ * Survivors working inside a building can be commanded too (the client selects units on the map;
+ * its panel buttons and the bots name workers); a move or a stop takes them out first.
  */
 import { OK, reject, type CommandHandler } from '../commands';
 import { SOLDIERS, SOLDIER_TYPES } from '../data/combat';
 import { idleTask } from '../economy/model';
 import type { Game } from '../game';
+import { isIsolated } from '../incidents/model';
 import { forEachFootprintTile, tileAtPoint } from '../map/grid';
 import { ensureNav } from '../nav/navGrid';
 import { FOG_VISIBLE, type Entity, type EntityId, type Soldier, type Survivor } from '../state';
+import { exitBuilding } from './entities';
 import { moveUnitTo, stopUnit } from './movement';
-import { isOnMap } from './spatial';
 
 type PlayerUnit = Soldier | Survivor;
 
-/** Living player units on the map among `ids`, without duplicates, in the given order. */
+/**
+ * Living player units among `ids`, without duplicates, in the given order: on the map, or survivors
+ * working inside a building. Survivors isolated by an incident take no commands.
+ */
 export function ownUnits(game: Game, ids: readonly EntityId[]): PlayerUnit[] {
   const out: PlayerUnit[] = [];
   const seen = new Set<EntityId>();
@@ -24,9 +31,16 @@ export function ownUnits(game: Game, ids: readonly EntityId[]): PlayerUnit[] {
     if (seen.has(id)) continue;
     seen.add(id);
     const e = game.state.entities.get(id);
-    if (e && (e.kind === 'soldier' || e.kind === 'survivor') && isOnMap(e)) out.push(e);
+    if (!e || (e.kind !== 'soldier' && e.kind !== 'survivor') || e.hp <= 0) continue;
+    if (e.kind === 'survivor' && isIsolated(game.state.incidents, e.id)) continue;
+    out.push(e);
   }
   return out;
+}
+
+/** A survivor sent elsewhere or stopped leaves the building it works in. */
+function leaveWork(game: Game, u: PlayerUnit): void {
+  if (u.kind === 'survivor' && u.insideId !== 0) exitBuilding(game, u);
 }
 
 function soldiersOf(units: readonly PlayerUnit[]): Soldier[] {
@@ -86,6 +100,8 @@ export const moveHandler: CommandHandler<'move'> = {
   execute(game, cmd) {
     const units = ownUnits(game, cmd.unitIds);
     for (const u of units) {
+      u.control = 'player';
+      leaveWork(game, u);
       if (u.kind === 'soldier') u.deploymentGoal = null;
       if (u.kind === 'soldier') u.order = { type: 'move', x: cmd.x, y: cmd.y };
       else u.task = idleTask();
@@ -99,6 +115,8 @@ export const attackMoveHandler: CommandHandler<'attackMove'> = {
   execute(game, cmd) {
     const units = ownUnits(game, cmd.unitIds);
     for (const u of units) {
+      u.control = 'player';
+      leaveWork(game, u);
       if (u.kind === 'soldier') u.deploymentGoal = null;
       if (u.kind === 'soldier') u.order = { type: 'attackMove', x: cmd.x, y: cmd.y };
       else u.task = idleTask();
@@ -133,6 +151,7 @@ export const attackTargetHandler: CommandHandler<'attackTarget'> = {
   execute(game, cmd) {
     const target = game.state.entities.get(cmd.targetId) as Entity;
     for (const s of soldiersOf(ownUnits(game, cmd.unitIds))) {
+      s.control = 'player';
       s.deploymentGoal = null;
       s.order = { type: 'attackTarget', targetId: cmd.targetId };
       moveUnitTo(game, s, target.x, target.y);
@@ -144,6 +163,8 @@ export const stopHandler: CommandHandler<'stop'> = {
   validate: (game, cmd) => (ownUnits(game, cmd.unitIds).length === 0 ? reject('noValidUnits') : OK),
   execute(game, cmd) {
     for (const u of ownUnits(game, cmd.unitIds)) {
+      u.control = 'auto';
+      leaveWork(game, u);
       if (u.kind === 'soldier') u.deploymentGoal = null;
       if (u.kind === 'soldier') u.order = { type: 'idle' };
       else u.task = idleTask();
@@ -156,6 +177,7 @@ export const holdHandler: CommandHandler<'hold'> = {
   validate: (game, cmd) => (soldiersOf(ownUnits(game, cmd.unitIds)).length === 0 ? reject('noValidUnits') : OK),
   execute(game, cmd) {
     for (const s of soldiersOf(ownUnits(game, cmd.unitIds))) {
+      s.control = 'player';
       s.deploymentGoal = null;
       s.order = { type: 'hold' };
       stopUnit(s);
